@@ -1,0 +1,11 @@
+node_modules/
+client/node_modules/
+data/
+public/
+client/dist/
+*.db
+*.db-shm
+*.db-wal
+.env
+*.log
+.npm/
