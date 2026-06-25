@@ -9,3 +9,7 @@ client/dist/
 .env
 *.log
 .npm/
+*.zip
+client/src/*.zip
+client/src/src/
+client/src/index.html
