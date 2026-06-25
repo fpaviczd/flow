@@ -58,15 +58,15 @@ const useTheme = () => {
 };
 
 const api = async (url, opts={}, adminPw) => {
-  const h = {'Content-Type':'application/json', ...(adminPw ? {'x-admin-password':adminPw} : {}), ...opts.headers};
+  const h = {'Content-Type':'application/json', ...(adminPw ? {'authorization':'Bearer '+adminPw} : {}), ...opts.headers};
   return fetch(url, {...opts, headers:h}).then(r=>r.json());
 };
 
 // ─── Session storage ──────────────────────────────────────────────────────────
 const SESSION = {
-  saveAdmin: (pw) => localStorage.setItem('flow_admin_pw', pw),
-  loadAdmin: () => localStorage.getItem('flow_admin_pw'),
-  clearAdmin: () => localStorage.removeItem('flow_admin_pw'),
+  saveAdmin: (pw) => localStorage.setItem('flow_admin_token', pw),
+  loadAdmin: () => localStorage.getItem('flow_admin_token'),
+  clearAdmin: () => localStorage.removeItem('flow_admin_token'),
   saveClient: (code) => localStorage.setItem('flow_client_code', code),
   loadClient: () => localStorage.getItem('flow_client_code'),
   clearClient: () => localStorage.removeItem('flow_client_code'),
@@ -548,7 +548,7 @@ function HomeView({ toggleTheme, theme,onAdmin, onClient }) {
     if (!ap) return; setLoading(true);
     const r = await api('/api/auth/admin',{method:'POST',body:JSON.stringify({password:ap})});
     setLoading(false);
-    if (r.ok){SESSION.saveAdmin(ap);onAdmin(ap);}else trigErr('Pogrešna lozinka.');
+    if (r.ok && r.token){SESSION.saveAdmin(r.token);onAdmin(r.token);}else trigErr('Pogrešna lozinka.');
   };
 
   const doClient = async () => {
@@ -728,11 +728,11 @@ function AdminView({adminPw, onLogout, toggleTheme, theme}) {
   const done = proj?proj.tasks.filter(t=>t.done).length:0;
   const total = proj?proj.tasks.length:0;
   const pct = total>0?Math.round((done/total)*100):0;
-  const h = {'Content-Type':'application/json','x-admin-password':adminPw};
+  const h = {'Content-Type':'application/json','authorization':'Bearer '+adminPw};
 
   const load = useCallback(async()=>{
     setLoading(true);
-    const d = await fetch('/api/projects',{headers:{'x-admin-password':adminPw}}).then(r=>r.json());
+    const d = await fetch('/api/projects',{headers:{'authorization':'Bearer '+adminPw}}).then(r=>r.json());
     if(Array.isArray(d)) setProjects(d);
     setLoading(false);
   },[adminPw]);
@@ -759,7 +759,7 @@ function AdminView({adminPw, onLogout, toggleTheme, theme}) {
 
   const deleteProject = async()=>{
     if(!proj||!confirm('Obrisati projekt "'+proj.name+'"?')) return;
-    await fetch(`/api/projects/${selId}`,{method:'DELETE',headers:{'x-admin-password':adminPw}});
+    await fetch(`/api/projects/${selId}`,{method:'DELETE',headers:{'authorization':'Bearer '+adminPw}});
     setProjects(ps=>ps.filter(p=>p.id!==selId));setSelId(null);
   };
 
@@ -781,7 +781,7 @@ function AdminView({adminPw, onLogout, toggleTheme, theme}) {
       if(!t.error) setProjects(ps=>ps.map(p=>p.id===selId?{...p,tasks:p.tasks.map(x=>x.id===tid?t:x)}:p));
     },
     deleteTask: async(tid)=>{
-      await fetch(`/api/tasks/${tid}`,{method:'DELETE',headers:{'x-admin-password':adminPw}});
+      await fetch(`/api/tasks/${tid}`,{method:'DELETE',headers:{'authorization':'Bearer '+adminPw}});
       setProjects(ps=>ps.map(p=>p.id===selId?{...p,tasks:p.tasks.filter(x=>x.id!==tid)}:p));
     },
     moveTask: async(tid,direction)=>{
@@ -802,7 +802,7 @@ function AdminView({adminPw, onLogout, toggleTheme, theme}) {
       if(!c.error) setProjects(ps=>ps.map(p=>p.id===selId?{...p,tasks:p.tasks.map(x=>x.id===tid?{...x,comments:[...(x.comments||[]),c]}:x)}:p));
     },
     deleteComment: async(cid)=>{
-      await fetch(`/api/comments/${cid}`,{method:'DELETE',headers:{'x-admin-password':adminPw}});
+      await fetch(`/api/comments/${cid}`,{method:'DELETE',headers:{'authorization':'Bearer '+adminPw}});
       setProjects(ps=>ps.map(p=>p.id===selId?{...p,tasks:p.tasks.map(x=>({...x,comments:(x.comments||[]).filter(c=>c.id!==cid)}))}:p));
     },
     reorderTasks: (pid, sorted) => {
@@ -810,16 +810,16 @@ function AdminView({adminPw, onLogout, toggleTheme, theme}) {
     },
     archiveProject: async(pid)=>{
       if(!confirm('Arhivirati projekt? Neće biti vidljiv u listi, možeš ga pronaći u arhivi.')) return;
-      await fetch(`/api/projects/${pid}/archive`,{method:'PUT',headers:{'x-admin-password':adminPw}});
+      await fetch(`/api/projects/${pid}/archive`,{method:'PUT',headers:{'authorization':'Bearer '+adminPw}});
       setProjects(ps=>ps.filter(p=>p.id!==pid));
       setSelId(null);
     },
     copyProject: async(pid)=>{
-      const p = await fetch(`/api/projects/${pid}/copy`,{method:'POST',headers:{'x-admin-password':adminPw}}).then(r=>r.json());
+      const p = await fetch(`/api/projects/${pid}/copy`,{method:'POST',headers:{'authorization':'Bearer '+adminPw}}).then(r=>r.json());
       if(!p.error) { setProjects(ps=>[p,...ps]); setSelId(p.id); }
     },
     resolveComment: async(cid)=>{
-      const c = await fetch(`/api/comments/${cid}/resolve`,{method:'PUT',headers:{'x-admin-password':adminPw}}).then(r=>r.json());
+      const c = await fetch(`/api/comments/${cid}/resolve`,{method:'PUT',headers:{'authorization':'Bearer '+adminPw}}).then(r=>r.json());
       if(!c.error) setProjects(ps=>ps.map(p=>p.id===selId?{...p,tasks:p.tasks.map(x=>({...x,comments:(x.comments||[]).map(cm=>cm.id===cid?c:cm)}))}:p));
     },
   };
@@ -1193,8 +1193,8 @@ export default function App() {
       const savedClient = SESSION.loadClient();
 
       if(savedAdmin){
-        const r = await api('/api/auth/admin',{method:'POST',body:JSON.stringify({password:savedAdmin})});
-        if(r.ok){setAdminPw(savedAdmin);setScreen('admin');return;}
+        const r = await fetch('/api/projects',{headers:{'authorization':'Bearer '+savedAdmin}}).then(x=>x.json());
+        if(Array.isArray(r)){setAdminPw(savedAdmin);setScreen('admin');return;}
         else SESSION.clearAdmin();
       }
 

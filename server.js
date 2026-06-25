@@ -6,6 +6,9 @@ const crypto = require('crypto');
 
 // Send email via local Postfix
 const { execFileSync } = require('child_process');
+const bcrypt = require('bcrypt');
+const jwt = require('jsonwebtoken');
+const JWT_SECRET = process.env.JWT_SECRET || 'flow-secret-' + Math.random().toString(36);
 
 const sendMail = (to, subject, body, from = 'flow@arcadian.hr') => {
   try {
@@ -19,15 +22,16 @@ const sendMail = (to, subject, body, from = 'flow@arcadian.hr') => {
 
 const rateLimit = require('express-rate-limit');
 
+const app = express();
+app.set('trust proxy', 1);
+
 const authLimiter = rateLimit({
-  windowMs: 60 * 1000, // 1 minuta
+  windowMs: 60 * 1000,
   max: 10,
   message: { error: 'Previše pokušaja. Pokušajte za minutu.' },
   standardHeaders: true,
   legacyHeaders: false,
 });
-
-const app = express();
 const PORT = 3010;
 
 const dataDir = path.join(__dirname, 'data');
@@ -86,9 +90,16 @@ if (!db.prepare("SELECT value FROM settings WHERE key='admin_password'").get()) 
 
 const genId = () => crypto.randomBytes(8).toString('hex');
 const getAdminPass = () => db.prepare("SELECT value FROM settings WHERE key='admin_password'").get().value;
-const checkAdmin = (pw, res) => {
-  if (pw !== getAdminPass()) { res.status(403).json({ error: 'Unauthorized' }); return false; }
-  return true;
+const checkAdmin = (authHeader, res) => {
+  try {
+    const token = authHeader?.replace('Bearer ', '');
+    if (!token) { res.status(401).json({ error: 'Neovlašteni pristup.' }); return false; }
+    jwt.verify(token, JWT_SECRET);
+    return true;
+  } catch(e) {
+    res.status(401).json({ error: 'Sesija istekla.' });
+    return false;
+  }
 };
 
 const getTasksWithComments = (projectId) => {
@@ -109,34 +120,34 @@ app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
 // ── Auth ─────────────────────────────────────────────────────────────────────
-app.post('/api/auth/admin', authLimiter,, (req, res) => {
-  res.json({ ok: req.body.password === getAdminPass() });
-});
-
-app.post('/api/auth/client', authLimiter,, (req, res) => {
-  const proj = db.prepare("SELECT * FROM projects WHERE access_code=?").get(req.body.code?.trim());
-  if (!proj) return res.json({ ok: false });
-  res.json({ ok: true, project: { ...proj, tasks: getTasksWithComments(proj.id) } });
-});
-
-// ── Settings ─────────────────────────────────────────────────────────────────
-app.put('/api/settings/password', (req, res) => {
-  const { currentPassword, newPassword } = req.body;
-  if (!checkAdmin(currentPassword, res)) return;
-  if (!newPassword || newPassword.length < 4) return res.status(400).json({ error: 'Lozinka prekratka.' });
-  db.prepare("UPDATE settings SET value=? WHERE key='admin_password'").run(newPassword);
-  res.json({ ok: true });
+app.post('/api/auth/admin', authLimiter, async (req, res) => {
+ const { password } = req.body;
+ const s = db.prepare("SELECT value FROM settings WHERE key='admin_password'").get();
+ if (!s) return res.status(401).json({ error: 'Pogrešna lozinka.' });
+ let valid = false;
+ if (s.value.startsWith('$2b$')) {
+   valid = await bcrypt.compare(password, s.value);
+ } else {
+   valid = password === s.value;
+   if (valid) {
+     const hash = await bcrypt.hash(password, 10);
+     db.prepare("UPDATE settings SET value=? WHERE key='admin_password'").run(hash);
+   }
+ }
+ if (!valid) return res.status(401).json({ error: 'Pogrešna lozinka.' });
+ const token = jwt.sign({ role: 'admin' }, JWT_SECRET, { expiresIn: '30d' });
+ res.json({ ok: true, token });
 });
 
 // ── Projects ─────────────────────────────────────────────────────────────────
 app.get('/api/projects', (req, res) => {
-  if (!checkAdmin(req.headers['x-admin-password'], res)) return;
+  if (!checkAdmin(req.headers['authorization'], res)) return;
   const projects = db.prepare("SELECT * FROM projects WHERE archived=0 OR archived IS NULL ORDER BY created_at DESC").all();
   res.json(projects.map(p => ({ ...p, tasks: getTasksWithComments(p.id) })));
 });
 
 app.post('/api/projects', (req, res) => {
-  if (!checkAdmin(req.headers['x-admin-password'], res)) return;
+  if (!checkAdmin(req.headers['authorization'], res)) return;
   const { name, clientName, accessCode, description, clientEmail } = req.body;
   if (!name?.trim() || !accessCode?.trim()) return res.status(400).json({ error: 'Naziv i kod su obavezni.' });
   if (db.prepare("SELECT id FROM projects WHERE access_code=?").get(accessCode.trim()))
@@ -148,7 +159,7 @@ app.post('/api/projects', (req, res) => {
 });
 
 app.put('/api/projects/:id', (req, res) => {
-  if (!checkAdmin(req.headers['x-admin-password'], res)) return;
+  if (!checkAdmin(req.headers['authorization'], res)) return;
   const { name, clientName, accessCode, description, clientEmail } = req.body;
   if (db.prepare("SELECT id FROM projects WHERE access_code=? AND id!=?").get(accessCode?.trim(), req.params.id))
     return res.status(400).json({ error: 'Taj pristupni kod već postoji.' });
@@ -158,7 +169,7 @@ app.put('/api/projects/:id', (req, res) => {
 });
 
 app.put('/api/projects/:id/archive', (req, res) => {
-  if (!checkAdmin(req.headers['x-admin-password'], res)) return;
+  if (!checkAdmin(req.headers['authorization'], res)) return;
   const p = db.prepare("SELECT * FROM projects WHERE id=?").get(req.params.id);
   if (!p) return res.status(404).json({ error: 'Nije pronađen.' });
   db.prepare("UPDATE projects SET archived=? WHERE id=?").run(p.archived ? 0 : 1, req.params.id);
@@ -167,7 +178,7 @@ app.put('/api/projects/:id/archive', (req, res) => {
 
 // Get archived projects
 app.get('/api/projects/archived', (req, res) => {
-  if (!checkAdmin(req.headers['x-admin-password'], res)) return;
+  if (!checkAdmin(req.headers['authorization'], res)) return;
   const projects = db.prepare("SELECT * FROM projects WHERE archived=1 ORDER BY created_at DESC").all();
   const full = projects.map(p => ({
     ...p,
@@ -181,7 +192,7 @@ app.get('/api/projects/archived', (req, res) => {
 
 // Copy project
 app.post('/api/projects/:id/copy', (req, res) => {
-  if (!checkAdmin(req.headers['x-admin-password'], res)) return;
+  if (!checkAdmin(req.headers['authorization'], res)) return;
   const p = db.prepare("SELECT * FROM projects WHERE id=?").get(req.params.id);
   if (!p) return res.status(404).json({ error: 'Nije pronađen.' });
   const newId = genId();
@@ -203,14 +214,14 @@ app.post('/api/projects/:id/copy', (req, res) => {
 });
 
 app.delete('/api/projects/:id', (req, res) => {
-  if (!checkAdmin(req.headers['x-admin-password'], res)) return;
+  if (!checkAdmin(req.headers['authorization'], res)) return;
   db.prepare("DELETE FROM projects WHERE id=?").run(req.params.id);
   res.json({ ok: true });
 });
 
 // ── Tasks ─────────────────────────────────────────────────────────────────────
 app.post('/api/projects/:id/tasks', (req, res) => {
-  if (!checkAdmin(req.headers['x-admin-password'], res)) return;
+  if (!checkAdmin(req.headers['authorization'], res)) return;
   const { text } = req.body;
   if (!text?.trim()) return res.status(400).json({ error: 'Tekst je obavezan.' });
   const maxPos = db.prepare("SELECT COALESCE(MIN(position),0) as m FROM tasks WHERE project_id=?").get(req.params.id);
@@ -222,7 +233,7 @@ app.post('/api/projects/:id/tasks', (req, res) => {
 });
 
 app.put('/api/tasks/:id', (req, res) => {
-  if (!checkAdmin(req.headers['x-admin-password'], res)) return;
+  if (!checkAdmin(req.headers['authorization'], res)) return;
   const task = db.prepare("SELECT * FROM tasks WHERE id=?").get(req.params.id);
   if (!task) return res.status(404).json({ error: 'Nije pronađen.' });
   const { done, note, text, priority, status } = req.body;
@@ -254,14 +265,14 @@ app.put('/api/tasks/:id', (req, res) => {
 });
 
 app.delete('/api/tasks/:id', (req, res) => {
-  if (!checkAdmin(req.headers['x-admin-password'], res)) return;
+  if (!checkAdmin(req.headers['authorization'], res)) return;
   db.prepare("DELETE FROM tasks WHERE id=?").run(req.params.id);
   res.json({ ok: true });
 });
 
 // Task move (reorder)
 app.post('/api/tasks/:id/move', (req, res) => {
-  if (!checkAdmin(req.headers['x-admin-password'], res)) return;
+  if (!checkAdmin(req.headers['authorization'], res)) return;
   const { direction } = req.body;
   const task = db.prepare("SELECT * FROM tasks WHERE id=?").get(req.params.id);
   if (!task) return res.status(404).json({ error: 'Nije pronađen.' });
@@ -277,7 +288,7 @@ app.post('/api/tasks/:id/move', (req, res) => {
 
 // ── Comments ──────────────────────────────────────────────────────────────────
 app.post('/api/tasks/:id/comments', (req, res) => {
-  if (!checkAdmin(req.headers['x-admin-password'], res)) return;
+  if (!checkAdmin(req.headers['authorization'], res)) return;
   const { text } = req.body;
   if (!text?.trim()) return res.status(400).json({ error: 'Tekst je obavezan.' });
   const id = genId();
@@ -298,7 +309,7 @@ app.post('/api/tasks/:id/comments', (req, res) => {
 });
 
 app.put('/api/comments/:id/resolve', (req, res) => {
-  if (!checkAdmin(req.headers['x-admin-password'], res)) return;
+  if (!checkAdmin(req.headers['authorization'], res)) return;
   const c = db.prepare("SELECT * FROM comments WHERE id=?").get(req.params.id);
   if (!c) return res.status(404).json({ error: 'Nije pronađen.' });
   db.prepare("UPDATE comments SET resolved=? WHERE id=?").run(c.resolved ? 0 : 1, req.params.id);
@@ -306,7 +317,7 @@ app.put('/api/comments/:id/resolve', (req, res) => {
 });
 
 app.delete('/api/comments/:id', (req, res) => {
-  if (!checkAdmin(req.headers['x-admin-password'], res)) return;
+  if (!checkAdmin(req.headers['authorization'], res)) return;
   db.prepare("DELETE FROM comments WHERE id=?").run(req.params.id);
   res.json({ ok: true });
 });
