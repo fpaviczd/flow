@@ -678,6 +678,59 @@ function AdminDashboard({ projects, onSelect }) {
         {statBox('Neriješenih komentara', unresolvedComments, unresolvedComments>0?C.amber:C.grn)}
       </div>
 
+      {(() => {
+        const now = new Date();
+        const overdue = [];
+        const soon = [];
+        projects.forEach(p => {
+          p.tasks.forEach(t => {
+            if (!t.done && t.due_date) {
+              const due = new Date(t.due_date + 'T00:00:00');
+              const diff = due - now;
+              if (diff < 0) overdue.push({proj:p.name, task:t.text, due});
+              else if (diff < 3*86400000) soon.push({proj:p.name, task:t.text, due});
+            }
+          });
+        });
+        if (overdue.length === 0 && soon.length === 0) return null;
+        return (
+          <div style={{marginBottom:24}}>
+            {overdue.length > 0 && (
+              <div style={{background:C.commentClient,border:`1px solid ${C.red}`,
+                borderRadius:8,padding:'12px 16px',marginBottom:10}}>
+                <p style={{fontSize:13,fontWeight:700,color:C.red,marginBottom:8}}>
+                  ⚠ {overdue.length} zadatak{overdue.length>1?'a':''} s prošlim rokom
+                </p>
+                {overdue.map((x,i) => (
+                  <p key={i} style={{fontSize:12,color:C.red,marginBottom:2}}>
+                    <strong>{x.proj}</strong> — {x.task.substring(0,50)}{x.task.length>50?'...':''}
+                    <span style={{marginLeft:6,opacity:0.7}}>
+                      ({x.due.toLocaleDateString('hr-HR',{day:'2-digit',month:'2-digit'})})
+                    </span>
+                  </p>
+                ))}
+              </div>
+            )}
+            {soon.length > 0 && (
+              <div style={{background:C.commentClient,border:`1px solid ${C.amber}`,
+                borderRadius:8,padding:'12px 16px',marginBottom:10}}>
+                <p style={{fontSize:13,fontWeight:700,color:C.amber,marginBottom:8}}>
+                  📅 {soon.length} zadatak{soon.length>1?'a':''} s rokom u sljedeća 3 dana
+                </p>
+                {soon.map((x,i) => (
+                  <p key={i} style={{fontSize:12,color:C.amber,marginBottom:2}}>
+                    <strong>{x.proj}</strong> — {x.task.substring(0,50)}{x.task.length>50?'...':''}
+                    <span style={{marginLeft:6,opacity:0.7}}>
+                      ({x.due.toLocaleDateString('hr-HR',{day:'2-digit',month:'2-digit'})})
+                    </span>
+                  </p>
+                ))}
+              </div>
+            )}
+          </div>
+        );
+      })()}
+
       <h3 style={{fontSize:16,fontWeight:700,marginBottom:14,fontFamily:'Archivo,system-ui,sans-serif'}}>Projekti</h3>
       <div style={{display:'flex',flexDirection:'column',gap:10}}>
         {projects.map(p => {
