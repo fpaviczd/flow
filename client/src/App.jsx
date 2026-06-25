@@ -14,21 +14,26 @@ const fmtDate = (iso) => {
 };
 
 // ─── Theme (light only) ───────────────────────────────────────────────────────
+// Cloudflare design tokens (exact hex)
 const LIGHT = {
-  bg:'#f7f5f0', sid:'#fffdf9', card:'#fffdf9', bdr:'#e3ddd1',
-  txt:'#1f2a3d', mut:'#4a5568', acc:'#c6a23c', grn:'#2d7a4f',
-  red:'#c5221f', amber:'#b8860b',
-  taskDone:'#f1ede4', taskDoneBdr:'#e3ddd1',
-  commentAdmin:'#f0ead8', commentAdminBdr:'#d4c49a', commentAdminTxt:'#8a6a1a',
-  commentClient:'#fef3e2', commentClientBdr:'#fde293', commentClientTxt:'#7a5200',
-  codeBlock:'#f1ede4', inputBg:'#f1ede4', btnSecBg:'#ece7dc',
+  bg:'#fafafa', sid:'#ffffff', card:'#ffffff', bdr:'#ededed',
+  txt:'#1a1a1a', mut:'#737373', pri:'#2c5cc5', priHover:'#2348a0', link:'#1d4ed8',
+  grn:'#059669', red:'#dc2626',
+  taskDone:'#fafafa', taskDoneBdr:'#ededed',
+  commentAdmin:'#fafafa', commentAdminBdr:'#ededed', commentAdminTxt:'#525252',
+  commentClient:'#eff4fc', commentClientBdr:'#cdddf5', commentClientTxt:'#2c5cc5',
+  codeBlock:'#f6f6f6', inputBg:'#ffffff', btnSecBg:'#f6f6f6', track:'#f1f1f1',
 };
 
+// Card elevation (Cloudflare)
+const SHADOW = '0 1px 2px rgba(0,0,0,0.08)';
+const SHADOW_HOVER = '0 4px 12px rgba(0,0,0,0.10)';
+
 const LIGHT_PRIO = {
-  normal: { label:'Normalan', color:'#4a5568', bg:'#ece7dc', border:'#e3ddd1' },
-  visok:  { label:'Visok',    color:'#8a6a1a', bg:'#fef3e2', border:'#e8c97a' },
-  hitan:  { label:'Hitan',   color:'#c5221f', bg:'#fce8e6', border:'#f5c6c6' },
-  nizak:  { label:'Nizak',   color:'#2a5a8a', bg:'#e8f0fa', border:'#b0c8e8' },
+  normal: { label:'Normalan', color:'#737373', bg:'#f6f6f6', border:'#ededed' },
+  visok:  { label:'Visok',    color:'#2c5cc5', bg:'#eff4fc', border:'#cdddf5' },
+  hitan:  { label:'Hitan',   color:'#dc2626', bg:'#fef2f2', border:'#fecaca' },
+  nizak:  { label:'Nizak',   color:'#9ca3af', bg:'#fafafa', border:'#ededed' },
 };
 const PRIO_CYCLE = ['normal','visok','hitan','nizak'];
 
@@ -79,45 +84,38 @@ function CommentList({comments, onDelete, onResolve }) {
   const { C, PRIO } = useTheme();
   if (!comments || comments.length === 0) return null;
   return (
-    <div style={{marginTop:8,display:'flex',flexDirection:'column',gap:4}}>
+    <div style={{marginTop:10}}>
       {comments.map(c => {
         const isClient = c.author === 'client';
         const isResolved = c.resolved === 1;
         return (
-          <div key={c.id} style={{
-            background: isResolved ? C.taskDone : isClient ? C.commentClient : C.commentAdmin,
-            border:`1px solid ${isResolved?C.taskDoneBdr:isClient?C.commentClientBdr:C.commentAdminBdr}`,
-            borderRadius:4,padding:'7px 10px',opacity:isResolved?0.65:1,
-            borderLeft:`3px solid ${isResolved?C.grn:isClient?C.amber:C.acc}`
-          }}>
-            <div style={{display:'flex',alignItems:'flex-start',gap:8}}>
-              <div style={{flex:1}}>
-                <div style={{display:'flex',alignItems:'center',gap:6,marginBottom:3}}>
-                  <span style={{fontSize:10,fontWeight:700,letterSpacing:'0.08em',
-                    color:isClient?C.amber:C.acc}}>
-                    {isClient?'KLIJENT':'ADMIN'}
-                  </span>
-                  {isResolved&&<span style={{fontSize:10,color:C.grn,fontWeight:600}}>✓ RIJEŠENO</span>}
-                </div>
-                <p style={{fontSize:13,color:isClient?C.commentClientTxt:C.commentAdminTxt,lineHeight:1.5,
-                  textDecoration:isResolved?'line-through':'none'}}>{c.text}</p>
-                <p style={{fontSize:10,color:C.mut,marginTop:2,fontWeight:600}}>{fmtDate(c.created_at)}</p>
+          <div key={c.id} style={{display:'flex',alignItems:'flex-start',gap:10,
+            padding:'9px 0',borderTop:`1px solid ${C.bdr}`,opacity:isResolved?0.55:1}}>
+            <div style={{flex:1,minWidth:0}}>
+              <div style={{display:'flex',alignItems:'center',gap:8,flexWrap:'nowrap',marginBottom:3}}>
+                <span style={{fontSize:10,fontWeight:600,letterSpacing:'0.06em',color:C.mut,flexShrink:0}}>
+                  {isClient?'KLIJENT':'ADMIN'}
+                </span>
+                <span style={{fontSize:11,color:C.mut,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',minWidth:0}}>{fmtDate(c.created_at)}</span>
+                {isResolved&&<span style={{fontSize:10,color:C.grn,fontWeight:600,letterSpacing:'0.04em',flexShrink:0,whiteSpace:'nowrap'}}>✓ RIJEŠENO</span>}
               </div>
-              <div style={{display:'flex',gap:4,flexShrink:0}}>
-                {onResolve&&(
-                  <button onClick={()=>onResolve(c.id)} title={isResolved?'Poništi':'Označi riješeno'}
-                    style={{background:isResolved?C.taskDone:C.btnSecBg,border:'none',
-                      color:isResolved?C.grn:C.mut,cursor:'pointer',padding:'3px 6px',borderRadius:4,fontSize:13}}>
-                    ✓
-                  </button>
-                )}
-                {onDelete&&(
-                  <button onClick={()=>onDelete(c.id)}
-                    style={{background:'transparent',border:'none',color:C.red,cursor:'pointer',padding:'3px 5px'}}>
-                    <TrashIco/>
-                  </button>
-                )}
-              </div>
+              <p style={{fontSize:13,color:C.txt,lineHeight:1.55,
+                textDecoration:isResolved?'line-through':'none'}}>{c.text}</p>
+            </div>
+            <div style={{display:'flex',gap:2,flexShrink:0}}>
+              {onResolve&&(
+                <button onClick={()=>onResolve(c.id)} title={isResolved?'Poništi':'Označi riješeno'}
+                  style={{background:'transparent',border:'none',
+                    color:isResolved?C.grn:C.mut,cursor:'pointer',padding:'2px 6px',fontSize:13}}>
+                  ✓
+                </button>
+              )}
+              {onDelete&&(
+                <button onClick={()=>onDelete(c.id)}
+                  style={{background:'transparent',border:'none',color:C.mut,cursor:'pointer',padding:'2px 5px'}}>
+                  <TrashIco/>
+                </button>
+              )}
             </div>
           </div>
         );
@@ -144,7 +142,7 @@ function AddCommentForm({taskId, onAdd }) {
           padding:'7px 10px',fontSize:13,color:C.txt,resize:'none',fontWeight:600}}/>
       <div style={{display:'flex',gap:6,marginTop:4}}>
         <button onClick={()=>{if(text.trim()){onAdd(taskId,text.trim());setText('');setOpen(false);}}}
-          style={{background:C.acc,color:'#0c0e10',border:'none',borderRadius:4,padding:'5px 14px',fontSize:12,fontWeight:700,cursor:'pointer',}}>Dodaj</button>
+          style={{background:C.pri,color:'#fff',border:'none',borderRadius:8,padding:'8px 16px',fontSize:14,fontWeight:500,letterSpacing:'-0.01em',cursor:'pointer',}}>Dodaj</button>
         <button onClick={()=>{setOpen(false);setText('');}}
           style={{background:'transparent',border:`1px solid ${C.bdr}`,color:C.mut,borderRadius:4,padding:'5px 14px',fontSize:12,cursor:'pointer',fontWeight:600}}>✕</button>
       </div>
@@ -164,8 +162,8 @@ function AddTaskInput({onAdd }) {
         style={{flex:1,minWidth:0,background:C.card,border:`1px solid ${C.bdr}`,borderRadius:6,
           padding:'10px 14px',fontSize:14,color:C.txt,resize:'none',lineHeight:1.5}}/>
       <button onClick={submit}
-        style={{background:C.acc,color:'#0c0e10',border:'none',borderRadius:6,padding:'10px 18px',
-          fontSize:13,fontWeight:700,cursor:'pointer',flexShrink:0,}}>
+        style={{background:C.pri,color:'#fff',border:'none',borderRadius:8,padding:'8px 16px',
+          fontSize:14,fontWeight:500,letterSpacing:'-0.01em',cursor:'pointer',flexShrink:0,}}>
         Dodaj
       </button>
     </div>
@@ -220,14 +218,11 @@ function TaskItem({task, isFirst, isLast, onToggle, onMoveUp, onMoveDown, onDele
     setEditingText(false);
   };
 
-  const hasUnresolvedClient = (task.comments||[]).some(c=>c.author==='client'&&!c.resolved);
-
   return (
     <div style={{
       background: task.done?C.taskDone:C.card,
-      border:`1px solid ${task.done?C.taskDoneBdr:hasUnresolvedClient?C.amber:C.bdr}`,
-      borderRadius:6,padding:'12px 14px',marginBottom:8,
-      borderLeft:`3px solid ${task.done?C.grn:hasUnresolvedClient?C.amber:task.status==='awaiting_client'?C.amber:C.bdr}`
+      border:`1px solid ${C.bdr}`,boxShadow:SHADOW,
+      borderRadius:10,padding:16,marginBottom:8
     }}>
       <div style={{display:'flex',alignItems:'flex-start',gap:10}}>
         <button onClick={()=>onToggle(task.id,task.done)}
@@ -235,7 +230,7 @@ function TaskItem({task, isFirst, isLast, onToggle, onMoveUp, onMoveDown, onDele
             border:`2px solid ${task.done?C.grn:C.bdr}`,
             background:task.done?C.grn:'transparent',
             display:'flex',alignItems:'center',justifyContent:'center',
-            marginTop:1,color:'#0c0e10',cursor:'pointer',transition:'all 0.15s'}}>
+            marginTop:1,color:'#fff',cursor:'pointer',transition:'all 0.15s'}}>
           {Boolean(task.done)&&<CheckIco/>}
         </button>
 
@@ -246,13 +241,13 @@ function TaskItem({task, isFirst, isLast, onToggle, onMoveUp, onMoveDown, onDele
                 onChange={e=>setTaskText(e.target.value)}
                 onKeyDown={e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();saveText();}if(e.key==='Escape'){setTaskText(task.text);setEditingText(false);}}}
                 onBlur={saveText}
-                style={{flex:1,background:C.inputBg,border:`1px solid ${C.acc}`,borderRadius:4,
+                style={{flex:1,background:C.inputBg,border:`1px solid ${C.pri}`,borderRadius:4,
                   padding:'5px 8px',fontSize:14,color:C.txt,resize:'none',lineHeight:1.5}}/>
             ):(
               <ExpandableText text={task.text} onClick={()=>setEditingText(true)} title="Klikni za uredi"
-                style={{fontSize:14,color:task.done?C.mut:C.txt,
+                style={{fontSize:15,fontWeight:500,color:task.done?C.mut:C.txt,
                   textDecoration:task.done?'line-through':'none',
-                  lineHeight:1.5,cursor:'text',whiteSpace:'pre-wrap'}}/>
+                  lineHeight:1.55,cursor:'text',whiteSpace:'pre-wrap'}}/>
             )}
             <PrioBadge priority={task.priority} onClick={()=>onChangePriority(task.id,task.priority)}/>
           </div>
@@ -260,7 +255,7 @@ function TaskItem({task, isFirst, isLast, onToggle, onMoveUp, onMoveDown, onDele
           {task.note&&!showNoteEdit&&(
             <div style={{display:'flex',alignItems:'flex-start',gap:6,marginTop:6}}>
               <p style={{flex:1,fontSize:12,color:C.commentAdminTxt,background:C.commentAdmin,
-                padding:'5px 8px',borderRadius:4,borderLeft:`2px solid ${C.acc}`,lineHeight:1.4,fontStyle:'italic'}}>
+                padding:'5px 8px',borderRadius:4,borderLeft:`2px solid ${C.bdr}`,lineHeight:1.4,fontStyle:'italic'}}>
                 {task.note}
               </p>
               <button onClick={()=>{setShowNoteEdit(true);setNoteText(task.note);}}
@@ -283,7 +278,7 @@ function TaskItem({task, isFirst, isLast, onToggle, onMoveUp, onMoveDown, onDele
                   padding:'7px 10px',fontSize:12,color:C.txt,resize:'none'}}/>
               <div style={{display:'flex',gap:6,marginTop:4}}>
                 <button onClick={()=>{onEditNote(task.id,noteText);setShowNoteEdit(false);}}
-                  style={{background:C.acc,color:'#0c0e10',border:'none',borderRadius:4,padding:'5px 14px',fontSize:12,fontWeight:700,cursor:'pointer'}}>Spremi</button>
+                  style={{background:C.pri,color:'#fff',border:'none',borderRadius:8,padding:'8px 16px',fontSize:14,fontWeight:500,letterSpacing:'-0.01em',cursor:'pointer'}}>Spremi</button>
                 <button onClick={()=>setShowNoteEdit(false)}
                   style={{background:'transparent',border:`1px solid ${C.bdr}`,color:C.mut,borderRadius:4,padding:'5px 14px',fontSize:12,cursor:'pointer'}}>✕</button>
               </div>
@@ -314,7 +309,7 @@ function TaskItem({task, isFirst, isLast, onToggle, onMoveUp, onMoveDown, onDele
               }
               const overdue = due && due < new Date();
               const soon = due && !overdue && (due - new Date()) < 2*86400000;
-              const color = overdue ? C.red : soon ? C.amber : C.mut;
+              const color = overdue ? C.red : soon ? C.pri : C.mut;
               return (
                 <div style={{display:'flex',alignItems:'center',gap:6}}>
                   <span style={{fontSize:11,color:C.mut,fontWeight:500}}>rok:</span>
@@ -341,7 +336,7 @@ function TaskItem({task, isFirst, isLast, onToggle, onMoveUp, onMoveDown, onDele
             title="Čeka klijenta"
             style={{background:task.status==='awaiting_client'?C.commentClient:'transparent',
               border:`1px solid ${task.status==='awaiting_client'?C.commentClientBdr:C.bdr}`,
-              color:task.status==='awaiting_client'?C.amber:C.mut,
+              color:task.status==='awaiting_client'?C.pri:C.mut,
               width:28,height:28,borderRadius:4,cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center'}}>
             <MsgIco/>
           </button>
@@ -373,7 +368,7 @@ function ProjDetailView({proj, done, total, pct, editProj, setEditProj, onSaveEd
 
   return (
     <div style={{padding:'16px 16px 80px',maxWidth:960,margin:'0 auto'}}>
-      <div style={{background:C.card,border:`1px solid ${C.bdr}`,borderRadius:8,padding:20,marginBottom:14}}>
+      <div style={{background:C.card,border:`1px solid ${C.bdr}`,borderRadius:10,boxShadow:SHADOW,padding:16,marginBottom:8}}>
         {editProj?(
           <div>
             <p style={{fontSize:11,fontWeight:700,color:C.mut,textTransform:'uppercase',
@@ -387,23 +382,23 @@ function ProjDetailView({proj, done, total, pct, editProj, setEditProj, onSaveEd
             <div style={{display:'flex',gap:6,marginBottom:10}}>
               <input value={editProj.accessCode||''} onChange={e=>setEditProj(ep=>({...ep,accessCode:e.target.value}))}
                 style={{flex:1,minWidth:0,background:C.inputBg,border:`1px solid ${C.bdr}`,borderRadius:6,
-                  padding:'9px 10px',fontSize:13,color:C.acc,fontWeight:600}}/>
+                  padding:'9px 10px',fontSize:13,color:C.link,fontWeight:600}}/>
               <button onClick={()=>setEditProj(ep=>({...ep,accessCode:generateCode()}))}
                 style={{background:C.btnSecBg,border:`1px solid ${C.bdr}`,borderRadius:6,padding:'0 10px',
                   color:C.mut,cursor:'pointer',display:'flex',alignItems:'center'}}><RefreshIco/></button>
             </div>
             <div style={{display:'flex',gap:8}}>
               <button onClick={onSaveEdit}
-                style={{flex:1,background:C.acc,color:'#0c0e10',border:'none',borderRadius:6,
-                  padding:'10px 0',fontSize:13,fontWeight:700,cursor:'pointer',}}>Spremi</button>
+                style={{background:C.pri,color:'#fff',border:'none',borderRadius:8,
+                  padding:'8px 16px',fontSize:14,fontWeight:500,letterSpacing:'-0.01em',cursor:'pointer',}}>Spremi</button>
               <button onClick={()=>setEditProj(null)}
-                style={{flex:1,background:'transparent',border:`1px solid ${C.bdr}`,color:C.mut,
-                  borderRadius:6,padding:'10px 0',fontSize:13,cursor:'pointer',fontWeight:600}}>Odustani</button>
+                style={{background:'transparent',border:`1px solid ${C.bdr}`,color:C.mut,
+                  borderRadius:8,padding:'8px 16px',fontSize:14,cursor:'pointer',fontWeight:500,letterSpacing:'-0.01em'}}>Odustani</button>
             </div>
           </div>
         ):(<>
           <div style={{marginBottom:14}}>
-            <h2 style={{fontSize:18,fontWeight:700,marginBottom:2}}>{proj.name}</h2>
+            <h2 style={{fontSize:18,fontWeight:600,color:C.txt,letterSpacing:'-0.01em',marginBottom:3}}>{proj.name}</h2>
             {proj.client_name&&<p style={{fontSize:13,color:C.mut,fontWeight:600,marginBottom:2}}>{proj.client_name}</p>}
             {proj.description&&<p style={{fontSize:12,color:C.mut,marginBottom:8}}>{proj.description}</p>}
             <div style={{display:'flex',gap:5,flexWrap:'wrap',marginTop:8}}>
@@ -413,10 +408,10 @@ function ProjDetailView({proj, done, total, pct, editProj, setEditProj, onSaveEd
                     padding:'5px 10px',fontSize:11,color:C.mut,cursor:'pointer',fontWeight:600}}>uredi</button>
                 <button onClick={onCopyProj}
                   style={{background:'transparent',border:`1px solid ${C.bdr}`,borderRadius:6,
-                    padding:'5px 10px',fontSize:11,color:C.acc,cursor:'pointer',fontWeight:600}}>kopiraj</button>
+                    padding:'5px 10px',fontSize:11,color:C.link,cursor:'pointer',fontWeight:600}}>kopiraj</button>
                 <button onClick={onArchiveProj}
                   style={{background:'transparent',border:`1px solid ${C.bdr}`,borderRadius:6,
-                    padding:'5px 10px',fontSize:11,color:C.amber,cursor:'pointer',fontWeight:600}}>arhiviraj</button>
+                    padding:'5px 10px',fontSize:11,color:C.mut,cursor:'pointer',fontWeight:600}}>arhiviraj</button>
                 <button onClick={onDeleteProj}
                   style={{background:'transparent',border:`1px solid ${C.red}`,borderRadius:6,
                     padding:'5px 10px',fontSize:11,color:C.red,cursor:'pointer',fontWeight:600}}>briši</button>
@@ -427,26 +422,26 @@ function ProjDetailView({proj, done, total, pct, editProj, setEditProj, onSaveEd
             <div style={{flex:1,minWidth:0}}>
               <p style={{fontSize:10,color:C.mut,textTransform:'uppercase',
                 letterSpacing:'0.08em',marginBottom:2,fontWeight:600}}>Pristupni kod</p>
-              <p style={{fontSize:15,fontWeight:700,color:C.acc,
+              <p style={{fontSize:15,fontWeight:700,color:C.link,
                 overflow:'hidden',textOverflow:'ellipsis'}}>{proj.access_code}</p>
             </div>
             <button onClick={onCopyCode}
               style={{background:codeCopied?C.taskDone:C.btnSecBg,
                 border:`1px solid ${codeCopied?C.taskDoneBdr:C.bdr}`,
                 borderRadius:6,padding:'8px 14px',fontSize:12,fontWeight:700,
-                color:codeCopied?C.grn:C.acc,cursor:'pointer',
+                color:codeCopied?C.grn:C.link,cursor:'pointer',
                 display:'flex',alignItems:'center',gap:6,flexShrink:0,fontWeight:600}}>
               {codeCopied?<CheckIco/>:<CopyIco/>}{codeCopied?'kopirano':'kopiraj'}
             </button>
           </div>
           <div style={{display:'flex',justifyContent:'space-between',marginBottom:6}}>
-            <span style={{fontSize:12,color:C.mut,fontWeight:600}}>{done}/{total} zadataka</span>
-            <span style={{fontSize:12,fontWeight:700,
-              color:pct===100?C.grn:C.txt}}>{pct}%</span>
+            <span style={{fontSize:13,color:C.mut,fontWeight:500}}>{done}/{total} zadataka</span>
+            <span style={{fontSize:13,fontWeight:600,
+              color:pct===100?C.grn:C.mut}}>{pct}%</span>
           </div>
-          <div style={{height:4,background:C.bdr,borderRadius:2,overflow:'hidden'}}>
+          <div style={{height:4,background:C.track,borderRadius:2,overflow:'hidden'}}>
             <div style={{width:pct+'%',height:'100%',
-              background:pct===100?C.grn:'linear-gradient(90deg,#79c0ff,#56d364)',
+              background:pct===100?C.grn:C.pri,
               transition:'width 0.4s',borderRadius:2}}/>
           </div>
         </>)}
@@ -506,7 +501,7 @@ function ProjListView({projects, loading, selectedId, onSelect }) {
                 {p.name}
               </span>
               {unresolvedClient&&(
-                <span style={{width:7,height:7,borderRadius:'50%',background:C.amber,
+                <span style={{width:7,height:7,borderRadius:'50%',background:C.red,
                   flexShrink:0,marginLeft:6,display:'inline-block'}}/>
               )}
             </div>
@@ -517,9 +512,9 @@ function ProjListView({projects, loading, selectedId, onSelect }) {
               </p>
             )}
             <div style={{display:'flex',alignItems:'center',gap:8}}>
-              <div style={{flex:1,height:3,background:C.bdr,borderRadius:2,overflow:'hidden'}}>
+              <div style={{flex:1,height:4,background:C.track,borderRadius:2,overflow:'hidden'}}>
                 <div style={{width:pct+'%',height:'100%',
-                  background:pct===100?C.grn:'linear-gradient(90deg,#79c0ff,#56d364)',
+                  background:pct===100?C.grn:C.pri,
                   borderRadius:2,transition:'width 0.3s'}}/>
               </div>
               <span style={{fontSize:11,color:C.mut,fontWeight:500,flexShrink:0}}>{d2}/{t2}</span>
@@ -548,26 +543,26 @@ function NewProjForm({form, setForm, codeCopied, onCopy, onCreate, onCancel }) {
       <div style={{display:'flex',gap:6,marginBottom:4}}>
         <input value={form.accessCode} onChange={e=>setForm(f=>({...f,accessCode:e.target.value}))}
           style={{flex:1,minWidth:0,background:C.inputBg,border:`1px solid ${C.bdr}`,borderRadius:6,
-            padding:'9px 10px',fontSize:12,color:C.acc,fontWeight:600}}/>
+            padding:'9px 10px',fontSize:12,color:C.link,fontWeight:600}}/>
         <button onClick={()=>setForm(f=>({...f,accessCode:generateCode()}))}
           style={{background:C.btnSecBg,border:`1px solid ${C.bdr}`,borderRadius:6,padding:'0 10px',
             color:C.mut,cursor:'pointer',flexShrink:0,display:'flex',alignItems:'center'}}><RefreshIco/></button>
         <button onClick={onCopy}
           style={{background:codeCopied?C.taskDone:C.btnSecBg,
             border:`1px solid ${codeCopied?C.taskDoneBdr:C.bdr}`,
-            borderRadius:6,padding:'0 10px',color:codeCopied?C.grn:C.acc,
+            borderRadius:6,padding:'0 10px',color:codeCopied?C.grn:C.link,
             cursor:'pointer',flexShrink:0,display:'flex',alignItems:'center',gap:4}}>
           {codeCopied?<CheckIco/>:<CopyIco/>}
         </button>
       </div>
-      <p style={{fontSize:10,color:C.bdr,marginBottom:10,fontWeight:600}}>auto-generiran</p>
+      <p style={{fontSize:10,color:C.mut,marginBottom:10,fontWeight:600}}>auto-generiran</p>
       <div style={{display:'flex',gap:7}}>
         <button onClick={onCreate}
-          style={{flex:1,background:C.acc,color:'#0c0e10',border:'none',borderRadius:6,
-            padding:'10px 0',fontSize:13,fontWeight:700,cursor:'pointer',}}>Kreiraj</button>
+          style={{background:C.pri,color:'#fff',border:'none',borderRadius:8,
+            padding:'8px 16px',fontSize:14,fontWeight:500,letterSpacing:'-0.01em',cursor:'pointer',}}>Kreiraj</button>
         <button onClick={onCancel}
-          style={{flex:1,background:'transparent',border:`1px solid ${C.bdr}`,color:C.mut,
-            borderRadius:6,padding:'10px 0',fontSize:13,cursor:'pointer',fontWeight:600}}>Odustani</button>
+          style={{background:'transparent',border:`1px solid ${C.bdr}`,color:C.mut,
+            borderRadius:8,padding:'8px 16px',fontSize:14,cursor:'pointer',fontWeight:500,letterSpacing:'-0.01em'}}>Odustani</button>
       </div>
     </div>
   );
@@ -603,16 +598,16 @@ function HomeView({ onAdmin, onClient }) {
       <div style={{width:'100%',maxWidth:380}}>
         <div style={{textAlign:'center',marginBottom:32}}>
           <img src="https://arcadian.hr/icon-512.png" alt="Arcadian"
-            style={{height:100,width:100,borderRadius:22,marginBottom:10,boxShadow:'0 4px 20px rgba(0,0,0,0.3)'}}/>
-          <p style={{fontSize:12,color:C.mut,fontWeight:600}}>Upravljanje projektima</p>
+            style={{height:100,width:100,borderRadius:22,marginBottom:10,boxShadow:'0 4px 20px rgba(0,0,0,0.12)'}}/>
+          <p style={{fontSize:13,color:C.mut,fontWeight:500}}>Upravljanje projektima</p>
         </div>
-        <div style={{background:C.card,border:`1px solid ${C.bdr}`,borderRadius:8,overflow:'hidden'}}>
+        <div style={{background:C.card,border:`1px solid ${C.bdr}`,borderRadius:10,boxShadow:SHADOW,overflow:'hidden'}}>
           <div style={{display:'flex',borderBottom:`1px solid ${C.bdr}`}}>
             {[['client','Klijentski pristup'],['admin','Admin']].map(([t,label])=>(
               <button key={t} onClick={()=>{setTab(t);setErr('');}}
                 style={{flex:1,padding:'13px 0',fontSize:13,fontWeight:500,border:'none',cursor:'pointer',
                   background:tab===t?C.btnSecBg:'transparent',color:tab===t?C.txt:C.mut,
-                  borderBottom:tab===t?`2px solid ${C.acc}`:'2px solid transparent',fontWeight:600}}>
+                  borderBottom:tab===t?`2px solid ${C.pri}`:'2px solid transparent',fontWeight:600}}>
                 {label}
               </button>
             ))}
@@ -629,8 +624,8 @@ function HomeView({ onAdmin, onClient }) {
                 {err&&<p style={{fontSize:12,color:C.red,marginBottom:10,fontWeight:600}}>{err}</p>}
                 {!err&&<div style={{height:16}}/>}
                 <button type="submit" disabled={loading}
-                  style={{width:'100%',padding:'12px 0',borderRadius:6,border:'none',cursor:'pointer',
-                    background:C.acc,color:'#0c0e10',fontSize:14,fontWeight:700,
+                  style={{width:'100%',padding:'12px 0',borderRadius:8,border:'none',cursor:'pointer',
+                    background:C.pri,color:'#fff',fontSize:14,fontWeight:500,letterSpacing:'-0.01em',
                     display:'flex',alignItems:'center',justifyContent:'center',gap:8}}>
                   {loading&&<SpinIco/>} otvori projekt
                 </button>
@@ -646,8 +641,8 @@ function HomeView({ onAdmin, onClient }) {
                 {err&&<p style={{fontSize:12,color:C.red,marginBottom:10,fontWeight:600}}>{err}</p>}
                 {!err&&<div style={{height:16}}/>}
                 <button type="submit" disabled={loading}
-                  style={{width:'100%',padding:'12px 0',borderRadius:6,border:'none',cursor:'pointer',
-                    background:C.btnSecBg,color:C.txt,fontSize:14,fontWeight:700,
+                  style={{width:'100%',padding:'12px 0',borderRadius:8,border:'none',cursor:'pointer',
+                    background:C.pri,color:'#fff',fontSize:14,fontWeight:500,letterSpacing:'-0.01em',
                     display:'flex',alignItems:'center',justifyContent:'center',gap:8}}>
                   {loading&&<SpinIco/>} prijavi se
                 </button>
@@ -671,23 +666,23 @@ function AdminDashboard({ projects, onSelect }) {
   const activeProjects = projects.filter(p=>p.tasks.some(t=>!t.done)).length;
 
   const statBox = (label, value, color) => (
-    <div style={{background:C.card,border:`1px solid ${C.bdr}`,borderRadius:12,
-      padding:'20px 24px',flex:1,minWidth:140}}>
-      <p style={{fontSize:32,fontWeight:800,color:color||C.txt,fontFamily:'Archivo,system-ui,sans-serif',lineHeight:1}}>{value}</p>
-      <p style={{fontSize:13,color:C.mut,marginTop:6}}>{label}</p>
+    <div style={{background:C.card,border:`1px solid ${C.bdr}`,borderRadius:10,boxShadow:SHADOW,
+      padding:'16px 20px',flex:1,minWidth:140}}>
+      <p style={{fontSize:28,fontWeight:700,color:color||C.txt,lineHeight:1,letterSpacing:'-0.02em'}}>{value}</p>
+      <p style={{fontSize:13,color:C.mut,marginTop:8,fontWeight:500}}>{label}</p>
     </div>
   );
 
   return (
     <div style={{maxWidth:900,margin:'0 auto',padding:'32px 24px'}}>
-      <h2 style={{fontSize:24,fontWeight:800,marginBottom:6,fontFamily:'Archivo,system-ui,sans-serif'}}>Pregled</h2>
-      <p style={{fontSize:14,color:C.mut,marginBottom:24}}>Stanje svih projekata</p>
+      <h2 style={{fontSize:18,fontWeight:600,color:C.txt,marginBottom:4}}>Pregled</h2>
+      <p style={{fontSize:13,color:C.mut,marginBottom:20}}>Stanje svih projekata</p>
 
-      <div style={{display:'flex',gap:14,marginBottom:32,flexWrap:'wrap'}}>
-        {statBox('Aktivnih projekata', activeProjects, C.acc)}
+      <div style={{display:'flex',gap:8,marginBottom:24,flexWrap:'wrap'}}>
+        {statBox('Aktivnih projekata', activeProjects, C.txt)}
         {statBox('Ukupno zadataka', totalTasks, C.txt)}
         {statBox('Završenih zadataka', doneTasks, C.grn)}
-        {statBox('Neriješenih komentara', unresolvedComments, unresolvedComments>0?C.amber:C.grn)}
+        {statBox('Neriješenih komentara', unresolvedComments, unresolvedComments>0?C.red:C.txt)}
       </div>
 
       {(() => {
@@ -708,7 +703,7 @@ function AdminDashboard({ projects, onSelect }) {
         return (
           <div style={{marginBottom:24}}>
             {overdue.length > 0 && (
-              <div style={{background:C.commentClient,border:`1px solid ${C.red}`,
+              <div style={{background:'#fef2f2',border:'1px solid #fecaca',
                 borderRadius:8,padding:'12px 16px',marginBottom:10}}>
                 <p style={{fontSize:13,fontWeight:700,color:C.red,marginBottom:8}}>
                   ⚠ {overdue.length} zadatak{overdue.length>1?'a':''} s prošlim rokom
@@ -724,13 +719,13 @@ function AdminDashboard({ projects, onSelect }) {
               </div>
             )}
             {soon.length > 0 && (
-              <div style={{background:C.commentClient,border:`1px solid ${C.amber}`,
+              <div style={{background:C.commentClient,border:`1px solid ${C.commentClientBdr}`,
                 borderRadius:8,padding:'12px 16px',marginBottom:10}}>
-                <p style={{fontSize:13,fontWeight:700,color:C.amber,marginBottom:8}}>
+                <p style={{fontSize:13,fontWeight:700,color:C.commentClientTxt,marginBottom:8}}>
                   📅 {soon.length} zadatak{soon.length>1?'a':''} s rokom u sljedeća 3 dana
                 </p>
                 {soon.map((x,i) => (
-                  <p key={i} style={{fontSize:12,color:C.amber,marginBottom:2}}>
+                  <p key={i} style={{fontSize:12,color:C.commentClientTxt,marginBottom:2}}>
                     <strong>{x.proj}</strong> — {x.task.substring(0,50)}{x.task.length>50?'...':''}
                     <span style={{marginLeft:6,opacity:0.7}}>
                       ({x.due.toLocaleDateString('hr-HR',{day:'2-digit',month:'2-digit'})})
@@ -743,8 +738,8 @@ function AdminDashboard({ projects, onSelect }) {
         );
       })()}
 
-      <h3 style={{fontSize:16,fontWeight:700,marginBottom:14,fontFamily:'Archivo,system-ui,sans-serif'}}>Projekti</h3>
-      <div style={{display:'flex',flexDirection:'column',gap:10}}>
+      <h3 style={{fontSize:18,fontWeight:600,color:C.txt,marginBottom:12}}>Projekti</h3>
+      <div style={{display:'flex',flexDirection:'column',gap:8}}>
         {projects.map(p => {
           const d = p.tasks.filter(t=>t.done).length;
           const t = p.tasks.length;
@@ -757,32 +752,31 @@ function AdminDashboard({ projects, onSelect }) {
 
           return (
             <div key={p.id} onClick={()=>onSelect(p.id)}
-              style={{background:C.card,border:`1px solid ${unresolved>0?C.amber:C.bdr}`,
-                borderRadius:10,padding:'16px 20px',cursor:'pointer',
-                transition:'box-shadow 0.15s',borderLeft:`4px solid ${pct===100?C.grn:unresolved>0?C.amber:C.acc}`}}
-              onMouseEnter={e=>e.currentTarget.style.boxShadow='0 4px 16px rgba(0,0,0,0.12)'}
-              onMouseLeave={e=>e.currentTarget.style.boxShadow='none'}>
+              style={{background:C.card,border:`1px solid ${C.bdr}`,boxShadow:SHADOW,
+                borderRadius:10,padding:16,cursor:'pointer',transition:'box-shadow 0.15s'}}
+              onMouseEnter={e=>e.currentTarget.style.boxShadow=SHADOW_HOVER}
+              onMouseLeave={e=>e.currentTarget.style.boxShadow=SHADOW}>
               <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:10}}>
                 <div style={{flex:1,minWidth:0}}>
-                  <p style={{fontSize:15,fontWeight:700,fontFamily:'Archivo,system-ui,sans-serif',
+                  <p style={{fontSize:15,fontWeight:600,color:C.txt,letterSpacing:'-0.01em',
                     overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{p.name}</p>
-                  {p.client_name&&<p style={{fontSize:12,color:C.mut,marginTop:1}}>{p.client_name}</p>}
+                  {p.client_name&&<p style={{fontSize:13,color:C.mut,marginTop:2}}>{p.client_name}</p>}
                 </div>
                 <div style={{display:'flex',alignItems:'center',gap:10,flexShrink:0,marginLeft:16}}>
                   {unresolved>0&&(
-                    <span style={{background:C.amber,color:'#1a1200',fontSize:11,fontWeight:700,
-                      padding:'2px 8px',borderRadius:20}}>{unresolved} kom.</span>
+                    <span style={{background:'#fef2f2',color:C.red,fontSize:11,fontWeight:600,
+                      padding:'2px 9px',borderRadius:20,border:'1px solid #fee2e2'}}>{unresolved} kom.</span>
                   )}
-                  <span style={{fontSize:13,fontWeight:700,color:pct===100?C.grn:C.txt}}>{pct}%</span>
+                  <span style={{fontSize:13,fontWeight:600,color:pct===100?C.grn:C.mut}}>{pct}%</span>
                 </div>
               </div>
-              <div style={{height:4,background:C.bdr,borderRadius:2,overflow:'hidden',marginBottom:8}}>
+              <div style={{height:4,background:C.track,borderRadius:2,overflow:'hidden',marginBottom:8}}>
                 <div style={{width:pct+'%',height:'100%',borderRadius:2,
-                  background:pct===100?C.grn:`linear-gradient(90deg,${C.acc},${C.grn})`}}/>
+                  background:pct===100?C.grn:C.pri}}/>
               </div>
               <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
-                <span style={{fontSize:12,color:C.mut}}>{d}/{t} zadataka</span>
-                {lastActivity&&<span style={{fontSize:11,color:C.mut}}>
+                <span style={{fontSize:13,color:C.mut}}>{d}/{t} zadataka</span>
+                {lastActivity&&<span style={{fontSize:12,color:C.mut}}>
                   {new Date(lastActivity).toLocaleDateString('hr-HR',{day:'2-digit',month:'2-digit',year:'numeric'})}
                 </span>}
               </div>
@@ -891,7 +885,7 @@ function ActivityLog({ projectId, adminPw }) {
             <div key={log.id} style={{padding:'10px 16px',borderBottom:`1px solid ${C.bdr}`,
               display:'flex',alignItems:'flex-start',gap:12}}>
               <span style={{fontSize:10,fontWeight:700,
-                color:log.actor==='client'?C.amber:C.acc,
+                color:log.actor==='client'?C.pri:C.mut,
                 background:log.actor==='client'?C.commentClient:C.commentAdmin,
                 padding:'2px 7px',borderRadius:4,flexShrink:0,marginTop:2}}>
                 {log.actor==='client'?'KLIJENT':'ADMIN'}
@@ -982,15 +976,15 @@ function AdminView({adminPw, onLogout}) {
     },
     toggleTask: async(tid,cur)=>{
       const t = await fetch(`/api/tasks/${tid}`,{method:'PUT',headers:h,body:JSON.stringify({done:!cur,status:'active'})}).then(r=>r.json());
-      if(!t.error) setProjects(ps=>ps.map(p=>p.id===selId?{...p,tasks:p.tasks.map(x=>x.id===tid?t:x)}:p));
+      if(!t.error) setProjects(ps=>ps.map(p=>p.id===selId?{...p,tasks:p.tasks.map(x=>x.id===tid?{...x,...t}:x)}:p));
     },
     editText: async(tid,text)=>{
       const t = await fetch(`/api/tasks/${tid}`,{method:'PUT',headers:h,body:JSON.stringify({text})}).then(r=>r.json());
-      if(!t.error) setProjects(ps=>ps.map(p=>p.id===selId?{...p,tasks:p.tasks.map(x=>x.id===tid?t:x)}:p));
+      if(!t.error) setProjects(ps=>ps.map(p=>p.id===selId?{...p,tasks:p.tasks.map(x=>x.id===tid?{...x,...t}:x)}:p));
     },
     editNote: async(tid,note)=>{
       const t = await fetch(`/api/tasks/${tid}`,{method:'PUT',headers:h,body:JSON.stringify({note})}).then(r=>r.json());
-      if(!t.error) setProjects(ps=>ps.map(p=>p.id===selId?{...p,tasks:p.tasks.map(x=>x.id===tid?t:x)}:p));
+      if(!t.error) setProjects(ps=>ps.map(p=>p.id===selId?{...p,tasks:p.tasks.map(x=>x.id===tid?{...x,...t}:x)}:p));
     },
     deleteTask: async(tid)=>{
       await fetch(`/api/tasks/${tid}`,{method:'DELETE',headers:{'authorization':'Bearer '+adminPw}});
@@ -1003,11 +997,11 @@ function AdminView({adminPw, onLogout}) {
     changePriority: async(tid,current)=>{
       const next = PRIO_CYCLE[(PRIO_CYCLE.indexOf(current)+1)%PRIO_CYCLE.length];
       const t = await fetch(`/api/tasks/${tid}`,{method:'PUT',headers:h,body:JSON.stringify({priority:next})}).then(r=>r.json());
-      if(!t.error) setProjects(ps=>ps.map(p=>p.id===selId?{...p,tasks:p.tasks.map(x=>x.id===tid?t:x)}:p));
+      if(!t.error) setProjects(ps=>ps.map(p=>p.id===selId?{...p,tasks:p.tasks.map(x=>x.id===tid?{...x,...t}:x)}:p));
     },
     setStatus: async(tid,status)=>{
       const t = await fetch(`/api/tasks/${tid}`,{method:'PUT',headers:h,body:JSON.stringify({status,done:0})}).then(r=>r.json());
-      if(!t.error) setProjects(ps=>ps.map(p=>p.id===selId?{...p,tasks:p.tasks.map(x=>x.id===tid?t:x)}:p));
+      if(!t.error) setProjects(ps=>ps.map(p=>p.id===selId?{...p,tasks:p.tasks.map(x=>x.id===tid?{...x,...t}:x)}:p));
     },
     addComment: async(tid,text)=>{
       const c = await fetch(`/api/tasks/${tid}/comments`,{method:'POST',headers:h,body:JSON.stringify({text})}).then(r=>r.json());
@@ -1023,7 +1017,7 @@ function AdminView({adminPw, onLogout}) {
     setDueDate: async(tid, due_date)=>{
       const h = {'Content-Type':'application/json','authorization':'Bearer '+adminPw};
       const t = await fetch(`/api/tasks/${tid}`,{method:'PUT',headers:h,body:JSON.stringify({due_date})}).then(r=>r.json());
-      if(!t.error) setProjects(ps=>ps.map(p=>p.id===selId?{...p,tasks:p.tasks.map(x=>x.id===tid?t:x)}:p));
+      if(!t.error) setProjects(ps=>ps.map(p=>p.id===selId?{...p,tasks:p.tasks.map(x=>x.id===tid?{...x,...t}:x)}:p));
     },
     addAttachment: (tid, att) => {
       setProjects(ps=>ps.map(p=>p.id===selId?{...p,tasks:p.tasks.map(x=>x.id===tid?{...x,attachments:[...(x.attachments||[]),att]}:x)}:p));
@@ -1095,7 +1089,7 @@ function AdminView({adminPw, onLogout}) {
         {showSettings&&(
           <div style={{background:C.inputBg,borderTop:`1px solid ${C.bdr}`,padding:12,
             display:'flex',flexWrap:'wrap',alignItems:'center',gap:8}}>
-            <span style={{fontSize:12,color:C.amber,fontWeight:600}}>nova lozinka:</span>
+            <span style={{fontSize:12,color:C.mut,fontWeight:600}}>nova lozinka:</span>
             <input type="password" placeholder="Trenutna" value={pf.current}
               onChange={e=>setPf(f=>({...f,current:e.target.value}))}
               style={{background:C.btnSecBg,border:`1px solid ${C.bdr}`,borderRadius:4,
@@ -1105,8 +1099,8 @@ function AdminView({adminPw, onLogout}) {
               style={{background:C.btnSecBg,border:`1px solid ${C.bdr}`,borderRadius:4,
                 padding:'6px 10px',fontSize:12,color:C.txt,width:120}}/>
             <button onClick={chPass}
-              style={{background:C.amber,color:'#0c0e10',fontSize:12,fontWeight:700,
-                padding:'6px 14px',borderRadius:4,border:'none',cursor:'pointer',}}>spremi</button>
+              style={{background:C.pri,color:'#fff',fontSize:14,fontWeight:500,letterSpacing:'-0.01em',
+                padding:'8px 16px',borderRadius:8,border:'none',cursor:'pointer',}}>spremi</button>
             {pfErr&&<span style={{fontSize:12,color:C.red,fontWeight:600}}>{pfErr}</span>}
           </div>
         )}
@@ -1128,10 +1122,10 @@ function AdminView({adminPw, onLogout}) {
               <p style={{fontSize:12,color:C.mut,marginTop:2}}>Arcadian</p>
             </div>
           </div>
-          <div style={{padding:10}}>
+          <div style={{padding:10,display:'flex',justifyContent:'flex-end'}}>
             <button onClick={openNew}
-              style={{width:'100%',background:C.acc,color:'#0c0e10',border:'none',
-                borderRadius:6,padding:'9px 0',fontSize:12,fontWeight:700,cursor:'pointer'}}>
+              style={{background:C.pri,color:'#fff',border:'none',
+                borderRadius:8,padding:'8px 16px',fontSize:14,fontWeight:500,letterSpacing:'-0.01em',cursor:'pointer'}}>
               + novi projekt
             </button>
           </div>
@@ -1150,10 +1144,10 @@ function AdminView({adminPw, onLogout}) {
         <div className="mobile-only">
           {!selId?(
             <div>
-              <div style={{padding:'12px 16px',borderBottom:`1px solid ${C.bdr}`}}>
+              <div style={{padding:'12px 16px',borderBottom:`1px solid ${C.bdr}`,display:'flex',justifyContent:'flex-end'}}>
                 <button onClick={openNew}
-                  style={{width:'100%',background:C.acc,color:'#0c0e10',border:'none',
-                    borderRadius:8,padding:'13px 0',fontSize:14,fontWeight:700,cursor:'pointer',}}>
+                  style={{background:C.pri,color:'#fff',border:'none',
+                    borderRadius:8,padding:'8px 16px',fontSize:14,fontWeight:500,letterSpacing:'-0.01em',cursor:'pointer',}}>
                   + novi projekt
                 </button>
               </div>
@@ -1210,7 +1204,7 @@ function ClientTaskText({ task, onEdit, onDelete }) {
         onChange={e=>setText(e.target.value)}
         onKeyDown={e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();save();}if(e.key==='Escape'){setText(task.text);setEditing(false);}}}
         onBlur={save}
-        style={{width:'100%',background:C.inputBg,border:'1px solid '+C.acc,borderRadius:6,
+        style={{width:'100%',background:C.inputBg,border:'1px solid '+C.pri,borderRadius:6,
           padding:'6px 10px',fontSize:14,color:C.txt,resize:'none',lineHeight:1.5}}/>
     </div>
   );
@@ -1219,8 +1213,8 @@ function ClientTaskText({ task, onEdit, onDelete }) {
     <div style={{flex:1,display:'flex',alignItems:'flex-start',justifyContent:'space-between',gap:8}}>
       <ExpandableText text={task.text} onClick={()=>!task.done&&setEditing(true)}
         title={task.done?'':'Klikni za uredi'}
-        style={{fontSize:14,color:task.done?C.mut:C.txt,textDecoration:task.done?'line-through':'none',
-          lineHeight:1.5,whiteSpace:'pre-wrap',cursor:task.done?'default':'text'}}/>
+        style={{fontSize:15,fontWeight:500,color:task.done?C.mut:C.txt,textDecoration:task.done?'line-through':'none',
+          lineHeight:1.55,whiteSpace:'pre-wrap',cursor:task.done?'default':'text'}}/>
       {!task.done && (
         <button onClick={()=>onDelete(task.id)}
           style={{background:'transparent',border:'none',color:C.red,cursor:'pointer',
@@ -1259,7 +1253,7 @@ function ClientView({project: initialProject, accessCode, onLogout }) {
       headers:{'Content-Type':'application/json','x-access-code':accessCode},
       body:JSON.stringify({text})
     }).then(r=>r.json());
-    if(!t.error) setProject(p=>({...p,tasks:p.tasks.map(x=>x.id===tid?t:x)}));
+    if(!t.error) setProject(p=>({...p,tasks:p.tasks.map(x=>x.id===tid?{...x,...t}:x)}));
   };
 
   const deleteClientTask = async(tid)=>{
@@ -1310,15 +1304,15 @@ function ClientView({project: initialProject, accessCode, onLogout }) {
       </div>
 
       <div style={{maxWidth:680,margin:'0 auto',padding:'20px 16px 60px'}}>
-        <div style={{background:C.card,border:`1px solid ${C.bdr}`,borderRadius:8,padding:20,marginBottom:16}}>
+        <div style={{background:C.card,border:`1px solid ${C.bdr}`,borderRadius:10,boxShadow:SHADOW,padding:16,marginBottom:8}}>
           <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:12}}>
-            <span style={{fontSize:14,fontWeight:600}}>Napredak projekta</span>
-            <span style={{fontSize:22,fontWeight:800,
+            <span style={{fontSize:15,fontWeight:600,color:C.txt}}>Napredak projekta</span>
+            <span style={{fontSize:22,fontWeight:700,
               color:pct===100?C.grn:C.txt}}>{pct}%</span>
           </div>
-          <div style={{height:4,background:C.bdr,borderRadius:2,overflow:'hidden'}}>
+          <div style={{height:4,background:C.track,borderRadius:2,overflow:'hidden'}}>
             <div style={{width:pct+'%',height:'100%',
-              background:pct===100?C.grn:'linear-gradient(90deg,#79c0ff,#56d364)',
+              background:pct===100?C.grn:C.pri,
               transition:'width 0.5s',borderRadius:2}}/>
           </div>
           <p style={{fontSize:12,color:C.mut,marginTop:8,fontWeight:600}}>{done} od {total} završeno</p>
@@ -1335,14 +1329,13 @@ function ClientView({project: initialProject, accessCode, onLogout }) {
         {project.tasks.map(task=>(
           <div key={task.id} style={{
             background:task.done?C.taskDone:C.card,
-            border:`1px solid ${task.done?C.taskDoneBdr:task.status==='awaiting_client'?C.amber:C.bdr}`,
-            borderLeft:`3px solid ${task.done?C.grn:task.status==='awaiting_client'?C.amber:C.bdr}`,
-            borderRadius:6,padding:'14px 16px',marginBottom:10}}>
+            border:`1px solid ${C.bdr}`,boxShadow:SHADOW,
+            borderRadius:10,padding:16,marginBottom:8}}>
             <div style={{display:'flex',alignItems:'flex-start',gap:12}}>
               <div style={{width:22,height:22,borderRadius:4,flexShrink:0,
                 border:`2px solid ${task.done?C.grn:C.bdr}`,
                 background:task.done?C.grn:'transparent',
-                display:'flex',alignItems:'center',justifyContent:'center',marginTop:2,color:'#0c0e10'}}>
+                display:'flex',alignItems:'center',justifyContent:'center',marginTop:2,color:'#fff'}}>
                 {Boolean(task.done)&&<CheckIco/>}
               </div>
               <div style={{flex:1,minWidth:0}}>
@@ -1351,7 +1344,7 @@ function ClientView({project: initialProject, accessCode, onLogout }) {
                   {task.priority&&task.priority!=='normal'&&<PrioBadge priority={task.priority}/>}
                 </div>
                 {task.note&&<p style={{fontSize:13,color:C.commentAdminTxt,background:C.commentAdmin,
-                  padding:'6px 10px',borderRadius:4,borderLeft:`2px solid ${C.acc}`,
+                  padding:'6px 10px',borderRadius:4,borderLeft:`2px solid ${C.bdr}`,
                   marginBottom:6,lineHeight:1.4,fontStyle:'italic'}}>{task.note}</p>}
                 <AttachmentList
                   attachments={task.attachments||[]}
@@ -1363,7 +1356,7 @@ function ClientView({project: initialProject, accessCode, onLogout }) {
               </div>
               <span style={{fontSize:11,padding:'3px 8px',borderRadius:4,flexShrink:0,fontWeight:600,
                 background:task.done?C.taskDone:task.status==='awaiting_client'?C.commentClient:C.btnSecBg,
-                color:task.done?C.grn:task.status==='awaiting_client'?C.amber:C.mut,
+                color:task.done?C.grn:task.status==='awaiting_client'?C.pri:C.mut,
                 border:`1px solid ${task.done?C.taskDoneBdr:task.status==='awaiting_client'?C.commentClientBdr:C.bdr}`,
                 marginTop:2}}>
                 {task.done?'gotovo':task.status==='awaiting_client'?'čeka klijenta':'na čekanju'}
@@ -1387,8 +1380,8 @@ export default function App() {
     document.body.style.background = LIGHT.bg;
     document.body.style.color = LIGHT.txt;
     const root = document.documentElement;
-    root.style.setProperty('--sidebar-bg', '#f0ede6');
-    root.style.setProperty('--sidebar-bdr', '#e3ddd1');
+    root.style.setProperty('--sidebar-bg', LIGHT.sid);
+    root.style.setProperty('--sidebar-bdr', LIGHT.bdr);
   }, []);
 
   // Auto-restore session on load
