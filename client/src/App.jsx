@@ -292,7 +292,7 @@ function TaskItem({task, isFirst, isLast, onToggle, onMoveUp, onMoveDown, onDele
                 ✓ {new Date(task.updated_at).toLocaleDateString('hr-HR',{day:'2-digit',month:'2-digit',year:'numeric'})}
               </span>
             )}
-            {(task.comments||[]).length > 0 && <span style={{fontSize:11,color:C.mut}}>💬 {(task.comments||[]).length}</span>}
+            {(task.comments||[]).length > 0 ? <span style={{fontSize:11,color:C.mut}}>💬 {(task.comments||[]).length}</span> : null}
 
             {!task.done && (() => {
               const due = task.due_date ? new Date(task.due_date + 'T00:00:00') : null;
