@@ -7,6 +7,28 @@ const crypto = require('crypto');
 // Send email via local Postfix
 const { execFileSync } = require('child_process');
 const bcrypt = require('bcrypt');
+const multer = require('multer');
+
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    const dir = path.join(__dirname, 'uploads');
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, {recursive:true});
+    cb(null, dir);
+  },
+  filename: (req, file, cb) => {
+    const ext = path.extname(file.originalname);
+    cb(null, genId() + ext);
+  }
+});
+const upload = multer({
+  storage,
+  limits: { fileSize: 10 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => {
+    const allowed = /jpeg|jpg|png|gif|pdf|doc|docx|xls|xlsx/;
+    const ok = allowed.test(path.extname(file.originalname).toLowerCase());
+    cb(null, ok);
+  }
+});
 const jwt = require('jsonwebtoken');
 const JWT_SECRET = process.env.JWT_SECRET || 'flow-secret-' + Math.random().toString(36);
 
@@ -79,6 +101,7 @@ try { db.exec("ALTER TABLE tasks ADD COLUMN priority TEXT DEFAULT 'normal'"); } 
 try { db.exec("ALTER TABLE tasks ADD COLUMN status TEXT DEFAULT 'active'"); } catch(e) {}
 try { db.exec("ALTER TABLE tasks ADD COLUMN updated_at TEXT"); } catch(e) {}
 try { db.exec("ALTER TABLE tasks ADD COLUMN due_date TEXT"); } catch(e) {}
+try { db.exec("CREATE TABLE IF NOT EXISTS attachments (id TEXT PRIMARY KEY, task_id TEXT, filename TEXT, original_name TEXT, mime_type TEXT, size INTEGER, uploaded_by TEXT, created_at TEXT, FOREIGN KEY(task_id) REFERENCES tasks(id) ON DELETE CASCADE)"); } catch(e) {}
 try { db.exec("CREATE TABLE IF NOT EXISTS activity_log (id TEXT PRIMARY KEY, project_id TEXT, task_id TEXT, action TEXT, actor TEXT, detail TEXT, created_at TEXT, FOREIGN KEY(project_id) REFERENCES projects(id) ON DELETE CASCADE)"); } catch(e) {}
 try { db.exec("ALTER TABLE projects ADD COLUMN client_email TEXT DEFAULT ''"); } catch(e) {}
 try { db.exec("ALTER TABLE projects ADD COLUMN archived INTEGER DEFAULT 0"); } catch(e) {}
@@ -114,7 +137,8 @@ const getTasksWithComments = (projectId) => {
   const tasks = db.prepare("SELECT * FROM tasks WHERE project_id=? ORDER BY position,created_at").all(projectId);
   return tasks.map(t => ({
     ...t,
-    comments: db.prepare("SELECT * FROM comments WHERE task_id=? ORDER BY created_at ASC").all(t.id)
+    comments: db.prepare("SELECT * FROM comments WHERE task_id=? ORDER BY created_at ASC").all(t.id),
+    attachments: db.prepare("SELECT * FROM attachments WHERE task_id=? ORDER BY created_at ASC").all(t.id)
   }));
 };
 
@@ -126,6 +150,7 @@ const getProjectWithTasks = (projectId) => {
 
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // ── Auth ─────────────────────────────────────────────────────────────────────
 app.post('/api/auth/admin', authLimiter, async (req, res) => {
@@ -423,6 +448,57 @@ app.post('/api/client/tasks/:id/comments', (req, res) => {
 
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
+
+// Serve uploaded files
+
+// Upload attachment (admin)
+app.post('/api/tasks/:id/attachments', (req, res) => {
+  if (!checkAdmin(req.headers['authorization'], res)) return;
+  const task = db.prepare("SELECT * FROM tasks WHERE id=?").get(req.params.id);
+  if (!task) return res.status(404).json({ error: 'Zadatak nije pronađen.' });
+  upload.single('file')(req, res, (err) => {
+    if (err) return res.status(400).json({ error: err.message });
+    if (!req.file) return res.status(400).json({ error: 'Nema fajla.' });
+    const id = genId();
+    db.prepare("INSERT INTO attachments (id,task_id,filename,original_name,mime_type,size,uploaded_by,created_at) VALUES (?,?,?,?,?,?,?,?)")
+      .run(id, req.params.id, req.file.filename, req.file.originalname, req.file.mimetype, req.file.size, 'admin', new Date().toISOString());
+    logActivity(task.project_id, req.params.id, 'attachment_added', 'admin', req.file.originalname);
+    res.json(db.prepare("SELECT * FROM attachments WHERE id=?").get(id));
+  });
+});
+
+// Upload attachment (client)
+app.post('/api/client/tasks/:id/attachments', (req, res) => {
+  const code = req.headers['x-access-code'];
+  const task = db.prepare('SELECT t.* FROM tasks t JOIN projects p ON t.project_id=p.id WHERE t.id=? AND p.access_code=?').get(req.params.id, code);
+  if (!task) return res.status(403).json({ error: 'Unauthorized' });
+  upload.single('file')(req, res, (err) => {
+    if (err) return res.status(400).json({ error: err.message });
+    if (!req.file) return res.status(400).json({ error: 'Nema fajla.' });
+    const id = genId();
+    db.prepare("INSERT INTO attachments (id,task_id,filename,original_name,mime_type,size,uploaded_by,created_at) VALUES (?,?,?,?,?,?,?,?)")
+      .run(id, req.params.id, req.file.filename, req.file.originalname, req.file.mimetype, req.file.size, 'client', new Date().toISOString());
+    logActivity(task.project_id, req.params.id, 'attachment_added', 'client', req.file.originalname);
+    res.json(db.prepare("SELECT * FROM attachments WHERE id=?").get(id));
+  });
+});
+
+// Delete attachment
+app.delete('/api/attachments/:id', (req, res) => {
+  if (!checkAdmin(req.headers['authorization'], res)) return;
+  const att = db.prepare("SELECT * FROM attachments WHERE id=?").get(req.params.id);
+  if (!att) return res.status(404).json({ error: 'Nije pronađen.' });
+  const filePath = path.join(__dirname, 'uploads', att.filename);
+  if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+  db.prepare("DELETE FROM attachments WHERE id=?").run(req.params.id);
+  res.json({ ok: true });
+});
+
+// Get attachments for task
+app.get('/api/tasks/:id/attachments', (req, res) => {
+  if (!checkAdmin(req.headers['authorization'], res)) return;
+  res.json(db.prepare("SELECT * FROM attachments WHERE task_id=? ORDER BY created_at ASC").all(req.params.id));
 });
 
 app.listen(PORT, () => console.log(`Flow @ ${PORT}`));

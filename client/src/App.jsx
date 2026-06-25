@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, createContext, useContext } from "react";
+import { useState, useEffect, useCallback, createContext, useContext, useRef } from "react";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 const generateCode = () => {
@@ -195,7 +195,7 @@ function AddTaskInput({onAdd }) {
   );
 }
 
-function TaskItem({task, isFirst, isLast, onToggle, onMoveUp, onMoveDown, onDelete, onChangePriority, onAddComment, onDeleteComment, onResolveComment, onEditNote, onEditText, onSetStatus }) {
+function TaskItem({task, isFirst, isLast, onToggle, onMoveUp, onMoveDown, onDelete, onChangePriority, onAddComment, onDeleteComment, onResolveComment, onEditNote, onEditText, onSetStatus, onSetDueDate, onAddAttachment, onDeleteAttachment, adminPw }) {
   const { C, PRIO } = useTheme();
   const [showNoteEdit, setShowNoteEdit] = useState(false);
   const [noteText, setNoteText] = useState(task.note||'');
@@ -315,6 +315,7 @@ function TaskItem({task, isFirst, isLast, onToggle, onMoveUp, onMoveDown, onDele
               );
             })()}
           </div>
+          <AttachmentList attachments={task.attachments||[]} taskId={task.id} adminPw={adminPw} onAdd={att=>onAddAttachment(task.id,att)} onDelete={aid=>onDeleteAttachment(task.id,aid)}/>
           <CommentList comments={task.comments} onDelete={onDeleteComment} onResolve={onResolveComment}/>
           <AddCommentForm taskId={task.id} onAdd={onAddComment}/>
         </div>
@@ -458,7 +459,7 @@ function ProjDetailView({proj, done, total, pct, editProj, setEditProj, onSaveEd
           onMoveDown={id=>handlers.moveTask(id,'down')} onDelete={handlers.deleteTask}
           onChangePriority={handlers.changePriority} onAddComment={handlers.addComment}
           onDeleteComment={handlers.deleteComment} onResolveComment={handlers.resolveComment}
-          onEditNote={handlers.editNote} onEditText={handlers.editText} onSetStatus={handlers.setStatus} onSetDueDate={handlers.setDueDate}/>
+          onEditNote={handlers.editNote} onEditText={handlers.editText} onSetStatus={handlers.setStatus} onSetDueDate={handlers.setDueDate} onAddAttachment={handlers.addAttachment} onDeleteAttachment={handlers.deleteAttachment} adminPw={adminPw}/>
       ))}
       <ActivityLog projectId={proj.id} adminPw={adminPw}/>
     </div>
@@ -793,6 +794,57 @@ const ACTION_LABELS = {
   comment_added: 'Dodan komentar',
 };
 
+
+function AttachmentList({ attachments, onDelete, taskId, adminPw, accessCode, onAdd }) {
+  const { C } = useTheme();
+
+  const upload = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const fd = new FormData();
+    fd.append('file', file);
+    const url = adminPw ? `/api/tasks/${taskId}/attachments` : `/api/client/tasks/${taskId}/attachments`;
+    const headers = adminPw ? {'authorization': 'Bearer ' + adminPw} : {'x-access-code': accessCode};
+    const r = await fetch(url, {method:'POST', headers, body:fd}).then(x=>x.json());
+    if (!r.error && onAdd) onAdd(r);
+    e.target.value = '';
+  };
+
+  const isImage = (m) => m && m.startsWith('image/');
+  const fmtSize = (b) => b < 1048576 ? Math.round(b/1024)+' KB' : (b/1048576).toFixed(1)+' MB';
+
+  return (
+    <div style={{marginTop:8}}>
+      {attachments && attachments.length > 0 ? (
+        <div style={{display:'flex',flexWrap:'wrap',gap:8,marginBottom:8}}>
+          {attachments.map(att => (
+            <div key={att.id} style={{position:'relative',display:'inline-flex',flexDirection:'column',alignItems:'center',gap:2}}>
+              {isImage(att.mime_type) ? (
+                <a href={'/uploads/'+att.filename} target="_blank" rel="noreferrer">
+                  <img src={'/uploads/'+att.filename} alt={att.original_name} style={{width:60,height:60,objectFit:'cover',borderRadius:6,border:'1px solid '+C.bdr}}/>
+                </a>
+              ) : (
+                <a href={'/uploads/'+att.filename} target="_blank" rel="noreferrer" style={{width:60,height:60,display:'flex',alignItems:'center',justifyContent:'center',background:C.btnSecBg,border:'1px solid '+C.bdr,borderRadius:6,textDecoration:'none',fontSize:22}}>
+                  PDF
+                </a>
+              )}
+              <span style={{fontSize:9,color:C.mut}}>{fmtSize(att.size)}</span>
+              {adminPw && onDelete ? (
+                <button onClick={()=>onDelete(att.id)} style={{position:'absolute',top:-4,right:-4,background:C.red,border:'none',borderRadius:'50%',width:16,height:16,color:'white',cursor:'pointer',fontSize:10,padding:0}}>x</button>
+              ) : null}
+            </div>
+          ))}
+        </div>
+      ) : null}
+      <label style={{display:'inline-flex',alignItems:'center',gap:4,fontSize:12,color:C.mut,cursor:'pointer',border:'1px dashed '+C.bdr,borderRadius:6,padding:'4px 10px'}}>
+        priloži
+        <input type="file" onChange={upload} accept="image/*,.pdf,.doc,.docx,.xls,.xlsx" style={{display:'none'}}/>
+      </label>
+    </div>
+  );
+}
+
+
 function ActivityLog({ projectId, adminPw }) {
   const { C } = useTheme();
   const [logs, setLogs] = useState([]);
@@ -961,6 +1013,13 @@ function AdminView({adminPw, onLogout, toggleTheme, theme}) {
       const h = {'Content-Type':'application/json','authorization':'Bearer '+adminPw};
       const t = await fetch(`/api/tasks/${tid}`,{method:'PUT',headers:h,body:JSON.stringify({due_date})}).then(r=>r.json());
       if(!t.error) setProjects(ps=>ps.map(p=>p.id===selId?{...p,tasks:p.tasks.map(x=>x.id===tid?t:x)}:p));
+    },
+    addAttachment: (tid, att) => {
+      setProjects(ps=>ps.map(p=>p.id===selId?{...p,tasks:p.tasks.map(x=>x.id===tid?{...x,attachments:[...(x.attachments||[]),att]}:x)}:p));
+    },
+    deleteAttachment: async(tid, aid) => {
+      await fetch(`/api/attachments/${aid}`,{method:'DELETE',headers:{'authorization':'Bearer '+adminPw}});
+      setProjects(ps=>ps.map(p=>p.id===selId?{...p,tasks:p.tasks.map(x=>x.id===tid?{...x,attachments:(x.attachments||[]).filter(a=>a.id!==aid)}:x)}:p));
     },
     archiveProject: async(pid)=>{
       if(!confirm('Arhivirati projekt? Neće biti vidljiv u listi, možeš ga pronaći u arhivi.')) return;
@@ -1295,6 +1354,11 @@ function ClientView({project: initialProject, accessCode, onLogout, toggleTheme,
                 {task.note&&<p style={{fontSize:13,color:C.commentAdminTxt,background:C.commentAdmin,
                   padding:'6px 10px',borderRadius:4,borderLeft:`2px solid ${C.acc}`,
                   marginBottom:6,lineHeight:1.4,fontStyle:'italic'}}>{task.note}</p>}
+                <AttachmentList
+                  attachments={task.attachments||[]}
+                  taskId={task.id}
+                  accessCode={accessCode}
+                  onAdd={att=>setProject(p=>({...p,tasks:p.tasks.map(t=>t.id===task.id?{...t,attachments:[...(t.attachments||[]),att]}:t)}))}/>
                 <CommentList comments={task.comments}/>
                 <AddCommentForm taskId={task.id} onAdd={addClientComment}/>
               </div>
