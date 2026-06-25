@@ -1149,7 +1149,7 @@ function ClientView({project: initialProject, accessCode, onLogout, toggleTheme,
                 color:task.done?C.grn:task.status==='awaiting_client'?C.amber:C.mut,
                 border:`1px solid ${task.done?C.taskDoneBdr:task.status==='awaiting_client'?C.commentClientBdr:C.bdr}`,
                 marginTop:2}}>
-                {task.done?'gotovo':task.status==='awaiting_client'?'čeka':'čeka'}
+                {task.done?'gotovo':task.status==='awaiting_client'?'čeka klijenta':'na čekanju'}
               </span>
             </div>
           </div>

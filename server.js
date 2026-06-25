@@ -3,7 +3,6 @@ const Database = require('better-sqlite3');
 const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
-const { execSync } = require('child_process');
 
 // Send email via local Postfix
 const { execFileSync } = require('child_process');
@@ -17,6 +16,16 @@ const sendMail = (to, subject, body, from = 'flow@arcadian.hr') => {
     console.error('[mail] Error:', e.message);
   }
 };
+
+const rateLimit = require('express-rate-limit');
+
+const authLimiter = rateLimit({
+  windowMs: 60 * 1000, // 1 minuta
+  max: 10,
+  message: { error: 'Previše pokušaja. Pokušajte za minutu.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
 
 const app = express();
 const PORT = 3010;
@@ -100,11 +109,11 @@ app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
 // ── Auth ─────────────────────────────────────────────────────────────────────
-app.post('/api/auth/admin', (req, res) => {
+app.post('/api/auth/admin', authLimiter,, (req, res) => {
   res.json({ ok: req.body.password === getAdminPass() });
 });
 
-app.post('/api/auth/client', (req, res) => {
+app.post('/api/auth/client', authLimiter,, (req, res) => {
   const proj = db.prepare("SELECT * FROM projects WHERE access_code=?").get(req.body.code?.trim());
   if (!proj) return res.json({ ok: false });
   res.json({ ok: true, project: { ...proj, tasks: getTasksWithComments(proj.id) } });
@@ -308,31 +317,13 @@ app.put('/api/client/tasks/:id', (req, res) => {
   const code = req.headers['x-access-code'];
   const { text } = req.body;
   if (!text?.trim()) return res.status(400).json({ error: 'Tekst je obavezan.' });
-  const task = db.prepare('SELECT t.* FROM tasks t JOIN projects p ON t.project_id = p.id WHERE t.id=? AND p.access_code=?').get(req.params.id, code);
-  if (!task) return res.status(403).json({ error: 'Unauthorized' });
-  db.prepare("UPDATE tasks SET text=? WHERE id=?").run(text.trim(), req.params.id);
-  res.json({ ...db.prepare("SELECT * FROM tasks WHERE id=?").get(req.params.id), comments: db.prepare("SELECT * FROM comments WHERE task_id=? ORDER BY created_at ASC").all(req.params.id) });
-});
-
-// Client delete task
-app.delete('/api/client/tasks/:id', (req, res) => {
-  const code = req.headers['x-access-code'];
-  const task = db.prepare('SELECT t.* FROM tasks t JOIN projects p ON t.project_id = p.id WHERE t.id=? AND p.access_code=?').get(req.params.id, code);
-  if (!task) return res.status(403).json({ error: 'Unauthorized' });
-  db.prepare("DELETE FROM tasks WHERE id=?").run(req.params.id);
-  res.json({ ok: true });
-});
-
-// Client add task
-
-// Client edit task text
-app.put('/api/client/tasks/:id', (req, res) => {
-  const code = req.headers['x-access-code'];
-  const { text } = req.body;
-  if (!text?.trim()) return res.status(400).json({ error: 'Tekst je obavezan.' });
   const task = db.prepare(`SELECT t.* FROM tasks t JOIN projects p ON t.project_id = p.id WHERE t.id=? AND p.access_code=?`).get(req.params.id, code);
   if (!task) return res.status(403).json({ error: 'Unauthorized' });
   db.prepare("UPDATE tasks SET text=? WHERE id=?").run(text.trim(), req.params.id);
+  const proj2 = db.prepare("SELECT * FROM projects WHERE id=?").get(task.project_id);
+  const subject2 = `[Flow] Klijent uredio zadatak – ${proj2.name}`;
+  const body2 = `Klijent ${proj2.client_name||''} je uredio zadatak:\n\nNovi tekst: "${text.trim()}"\n\nhttps://flow.arcadian.hr`;
+  sendMail('franko.pavic@gmail.com', subject2, body2);
   res.json({ ...db.prepare("SELECT * FROM tasks WHERE id=?").get(req.params.id), comments: db.prepare("SELECT * FROM comments WHERE task_id=? ORDER BY created_at ASC").all(req.params.id) });
 });
 
@@ -342,6 +333,10 @@ app.delete('/api/client/tasks/:id', (req, res) => {
   const task = db.prepare(`SELECT t.* FROM tasks t JOIN projects p ON t.project_id = p.id WHERE t.id=? AND p.access_code=?`).get(req.params.id, code);
   if (!task) return res.status(403).json({ error: 'Unauthorized' });
   db.prepare("DELETE FROM tasks WHERE id=?").run(req.params.id);
+  const proj3 = db.prepare("SELECT * FROM projects WHERE id=?").get(task.project_id);
+  const subject3 = `[Flow] Klijent obrisao zadatak – ${proj3.name}`;
+  const body3 = `Klijent ${proj3.client_name||''} je obrisao zadatak:\n\n"${task.text}"\n\nhttps://flow.arcadian.hr`;
+  sendMail('franko.pavic@gmail.com', subject3, body3);
   res.json({ ok: true });
 });
 app.post('/api/client/tasks', (req, res) => {
