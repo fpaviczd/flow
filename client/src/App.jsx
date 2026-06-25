@@ -283,15 +283,37 @@ function TaskItem({task, isFirst, isLast, onToggle, onMoveUp, onMoveDown, onDele
             </div>
           )}
 
-          <div style={{display:'flex',alignItems:'center',gap:12,marginTop:6,marginBottom:2}}>
+          <div style={{display:'flex',alignItems:'center',gap:12,marginTop:6,marginBottom:2,flexWrap:'wrap'}}>
             <span style={{fontSize:11,color:C.mut}}>
               {task.created_at ? new Date(task.created_at).toLocaleDateString('hr-HR',{day:'2-digit',month:'2-digit',year:'numeric'}) : ''}
             </span>
             {task.done && task.updated_at && (
               <span style={{fontSize:11,color:C.grn}}>
-                ✓ zatvoreno {new Date(task.updated_at).toLocaleDateString('hr-HR',{day:'2-digit',month:'2-digit',year:'numeric'})}
+                ✓ {new Date(task.updated_at).toLocaleDateString('hr-HR',{day:'2-digit',month:'2-digit',year:'numeric'})}
               </span>
             )}
+            {(task.comments||[]).length > 0 && <span style={{fontSize:11,color:C.mut}}>💬 {(task.comments||[]).length}</span>}
+
+            {!task.done && (() => {
+              const due = task.due_date ? new Date(task.due_date + 'T00:00:00') : null;
+              const overdue = due && due < new Date();
+              const soon = due && !overdue && (due - new Date()) < 2*86400000;
+              const color = overdue ? C.red : soon ? C.amber : C.mut;
+              return (
+                <div style={{display:'flex',alignItems:'center',gap:6}}>
+                  <span style={{fontSize:11,color:C.mut,fontWeight:500}}>rok:</span>
+                  <input type="date" value={task.due_date||''}
+                    onChange={e=>onSetDueDate(task.id, e.target.value||null)}
+                    style={{fontSize:12,color:due?color:C.mut,
+                      background:C.card,border:`1px solid ${due?color:C.bdr}`,
+                      borderRadius:6,padding:'2px 6px',cursor:'pointer',
+                      fontFamily:'inherit',fontWeight:due?600:400}}/>
+                  {due && <button onClick={()=>onSetDueDate(task.id,null)}
+                    style={{background:'transparent',border:'none',
+                      color:C.mut,cursor:'pointer',fontSize:14,padding:0}}>✕</button>}
+                </div>
+              );
+            })()}
           </div>
           <CommentList comments={task.comments} onDelete={onDeleteComment} onResolve={onResolveComment}/>
           <AddCommentForm taskId={task.id} onAdd={onAddComment}/>
@@ -327,7 +349,7 @@ function TaskItem({task, isFirst, isLast, onToggle, onMoveUp, onMoveDown, onDele
   );
 }
 
-function ProjDetailView({proj, done, total, pct, editProj, setEditProj, onSaveEdit, onDeleteProj, onArchiveProj, onCopyProj, codeCopied, onCopyCode, handlers }) {
+function ProjDetailView({proj, done, total, pct, editProj, setEditProj, onSaveEdit, onDeleteProj, onArchiveProj, onCopyProj, codeCopied, onCopyCode, handlers, adminPw }) {
   const { C, PRIO } = useTheme();
   const inp = {width:'100%',background:C.inputBg,border:`1px solid ${C.bdr}`,borderRadius:6,
     padding:'10px 12px',fontSize:14,color:C.txt,marginBottom:8};
@@ -436,8 +458,9 @@ function ProjDetailView({proj, done, total, pct, editProj, setEditProj, onSaveEd
           onMoveDown={id=>handlers.moveTask(id,'down')} onDelete={handlers.deleteTask}
           onChangePriority={handlers.changePriority} onAddComment={handlers.addComment}
           onDeleteComment={handlers.deleteComment} onResolveComment={handlers.resolveComment}
-          onEditNote={handlers.editNote} onEditText={handlers.editText} onSetStatus={handlers.setStatus}/>
+          onEditNote={handlers.editNote} onEditText={handlers.editText} onSetStatus={handlers.setStatus} onSetDueDate={handlers.setDueDate}/>
       ))}
+      <ActivityLog projectId={proj.id} adminPw={adminPw}/>
     </div>
   </div>
   );
@@ -706,6 +729,79 @@ function AdminDashboard({ projects, onSelect }) {
   );
 }
 
+
+const ACTION_LABELS = {
+  task_created: 'Kreiran zadatak',
+  task_done: 'Označeno završenim',
+  task_reopened: 'Ponovno otvoreno',
+  task_edited: 'Uređen zadatak',
+  status_changed: 'Status promijenjen',
+  priority_changed: 'Prioritet promijenjen',
+  comment_added: 'Dodan komentar',
+};
+
+function ActivityLog({ projectId, adminPw }) {
+  const { C } = useTheme();
+  const [logs, setLogs] = useState([]);
+  const [open, setOpen] = useState(false);
+  const [loading, setLoading] = useState(false);
+
+  const load = async () => {
+    setLoading(true);
+    const data = await fetch(`/api/projects/${projectId}/activity`, {
+      headers: { 'authorization': 'Bearer ' + adminPw }
+    }).then(r => r.json());
+    if (Array.isArray(data)) setLogs(data);
+    setLoading(false);
+  };
+
+  const toggle = () => {
+    if (!open) load();
+    setOpen(!open);
+  };
+
+  return (
+    <div style={{marginTop:16}}>
+      <button onClick={toggle}
+        style={{background:'transparent',border:`1px solid ${C.bdr}`,borderRadius:6,
+          padding:'6px 14px',fontSize:12,color:C.mut,cursor:'pointer',fontWeight:600}}>
+        {open ? '▲ Sakrij aktivnost' : '▼ Aktivnost projekta'}
+      </button>
+      {open && (
+        <div style={{marginTop:10,background:C.card,border:`1px solid ${C.bdr}`,borderRadius:8,overflow:'hidden'}}>
+          {loading && <p style={{padding:16,fontSize:12,color:C.mut}}>Učitavanje...</p>}
+          {!loading && logs.length === 0 && <p style={{padding:16,fontSize:12,color:C.mut}}>Nema aktivnosti.</p>}
+          {!loading && logs.map(log => (
+            <div key={log.id} style={{padding:'10px 16px',borderBottom:`1px solid ${C.bdr}`,
+              display:'flex',alignItems:'flex-start',gap:12}}>
+              <span style={{fontSize:10,fontWeight:700,
+                color:log.actor==='client'?C.amber:C.acc,
+                background:log.actor==='client'?C.commentClient:C.commentAdmin,
+                padding:'2px 7px',borderRadius:4,flexShrink:0,marginTop:2}}>
+                {log.actor==='client'?'KLIJENT':'ADMIN'}
+              </span>
+              <div style={{flex:1,minWidth:0}}>
+                <p style={{fontSize:13,color:C.txt,fontWeight:500}}>
+                  {ACTION_LABELS[log.action]||log.action}
+                </p>
+                {log.detail && <p style={{fontSize:12,color:C.mut,marginTop:2,
+                  overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>
+                  {log.detail}
+                </p>}
+              </div>
+              <span style={{fontSize:11,color:C.mut,flexShrink:0}}>
+                {new Date(log.created_at).toLocaleDateString('hr-HR',{day:'2-digit',month:'2-digit'})}
+                {' '}
+                {new Date(log.created_at).toLocaleTimeString('hr-HR',{hour:'2-digit',minute:'2-digit'})}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function AdminView({adminPw, onLogout, toggleTheme, theme}) {
   const { C, PRIO } = useTheme();
   const [projects, setProjects] = useState([]);
@@ -807,6 +903,11 @@ function AdminView({adminPw, onLogout, toggleTheme, theme}) {
     },
     reorderTasks: (pid, sorted) => {
       setProjects(ps=>ps.map(p=>p.id===pid?{...p,tasks:sorted}:p));
+    },
+    setDueDate: async(tid, due_date)=>{
+      const h = {'Content-Type':'application/json','authorization':'Bearer '+adminPw};
+      const t = await fetch(`/api/tasks/${tid}`,{method:'PUT',headers:h,body:JSON.stringify({due_date})}).then(r=>r.json());
+      if(!t.error) setProjects(ps=>ps.map(p=>p.id===selId?{...p,tasks:p.tasks.map(x=>x.id===tid?t:x)}:p));
     },
     archiveProject: async(pid)=>{
       if(!confirm('Arhivirati projekt? Neće biti vidljiv u listi, možeš ga pronaći u arhivi.')) return;
@@ -948,7 +1049,7 @@ function AdminView({adminPw, onLogout, toggleTheme, theme}) {
               onDeleteProj={deleteProject} onArchiveProj={()=>handlers.archiveProject(selId)}
               onCopyProj={()=>handlers.copyProject(selId)}
               codeCopied={codeCopied}
-              onCopyCode={()=>copy(proj.access_code,setCodeCopied)} handlers={handlers}/>
+              onCopyCode={()=>copy(proj.access_code,setCodeCopied)} handlers={handlers} adminPw={adminPw}/>
           ):null}
         </div>
 
@@ -961,7 +1062,7 @@ function AdminView({adminPw, onLogout, toggleTheme, theme}) {
               onDeleteProj={deleteProject} onArchiveProj={()=>handlers.archiveProject(selId)}
               onCopyProj={()=>handlers.copyProject(selId)}
               codeCopied={codeCopied}
-              onCopyCode={()=>copy(proj.access_code,setCodeCopied)} handlers={handlers}/>
+              onCopyCode={()=>copy(proj.access_code,setCodeCopied)} handlers={handlers} adminPw={adminPw}/>
           )}
         </div>
       </div>

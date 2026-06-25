@@ -78,6 +78,8 @@ db.exec(`
 try { db.exec("ALTER TABLE tasks ADD COLUMN priority TEXT DEFAULT 'normal'"); } catch(e) {}
 try { db.exec("ALTER TABLE tasks ADD COLUMN status TEXT DEFAULT 'active'"); } catch(e) {}
 try { db.exec("ALTER TABLE tasks ADD COLUMN updated_at TEXT"); } catch(e) {}
+try { db.exec("ALTER TABLE tasks ADD COLUMN due_date TEXT"); } catch(e) {}
+try { db.exec("CREATE TABLE IF NOT EXISTS activity_log (id TEXT PRIMARY KEY, project_id TEXT, task_id TEXT, action TEXT, actor TEXT, detail TEXT, created_at TEXT, FOREIGN KEY(project_id) REFERENCES projects(id) ON DELETE CASCADE)"); } catch(e) {}
 try { db.exec("ALTER TABLE projects ADD COLUMN client_email TEXT DEFAULT ''"); } catch(e) {}
 try { db.exec("ALTER TABLE projects ADD COLUMN archived INTEGER DEFAULT 0"); } catch(e) {}
 try { db.exec("ALTER TABLE comments ADD COLUMN author TEXT DEFAULT 'admin'"); } catch(e) {}
@@ -100,6 +102,12 @@ const checkAdmin = (authHeader, res) => {
     res.status(401).json({ error: 'Sesija istekla.' });
     return false;
   }
+};
+
+const logActivity = (projectId, taskId, action, actor, detail) => {
+  const id = genId();
+  db.prepare("INSERT INTO activity_log (id,project_id,task_id,action,actor,detail,created_at) VALUES (?,?,?,?,?,?,?)")
+    .run(id, projectId, taskId||null, action, actor, detail||null, new Date().toISOString());
 };
 
 const getTasksWithComments = (projectId) => {
@@ -166,6 +174,14 @@ app.put('/api/projects/:id', (req, res) => {
   db.prepare("UPDATE projects SET name=?,client_name=?,access_code=?,description=?,client_email=? WHERE id=?")
     .run(name.trim(), clientName?.trim() || '', accessCode.trim(), description?.trim() || '', clientEmail?.trim() || '', req.params.id);
   res.json(getProjectWithTasks(req.params.id));
+});
+
+app.get('/api/projects/:id/activity', (req, res) => {
+  if (!checkAdmin(req.headers['authorization'], res)) return;
+  const logs = db.prepare(
+    "SELECT * FROM activity_log WHERE project_id=? ORDER BY created_at DESC LIMIT 50"
+  ).all(req.params.id);
+  res.json(logs);
 });
 
 app.put('/api/projects/:id/archive', (req, res) => {
@@ -236,18 +252,28 @@ app.put('/api/tasks/:id', (req, res) => {
   if (!checkAdmin(req.headers['authorization'], res)) return;
   const task = db.prepare("SELECT * FROM tasks WHERE id=?").get(req.params.id);
   if (!task) return res.status(404).json({ error: 'Nije pronađen.' });
-  const { done, note, text, priority, status } = req.body;
+  const { done, note, text, priority, status, due_date } = req.body;
   const updated_at = new Date().toISOString();
   const wasDone = task.done;
-  db.prepare("UPDATE tasks SET done=?,note=?,text=?,priority=?,status=?,updated_at=? WHERE id=?").run(
+  db.prepare("UPDATE tasks SET done=?,note=?,text=?,priority=?,status=?,updated_at=?,due_date=? WHERE id=?").run(
     done !== undefined ? (done ? 1 : 0) : task.done,
     note !== undefined ? note : task.note,
     text !== undefined ? text.trim() : task.text,
     priority !== undefined ? priority : task.priority,
     status !== undefined ? status : (task.status || 'active'),
     updated_at,
+    due_date !== undefined ? due_date : task.due_date,
     req.params.id
   );
+
+  // Activity log
+  const updTask = db.prepare("SELECT * FROM tasks WHERE id=?").get(req.params.id);
+  const updProj = db.prepare("SELECT * FROM projects WHERE id=?").get(task.project_id);
+  if (done && !wasDone) logActivity(task.project_id, req.params.id, 'task_done', 'admin', updTask.text.substring(0,80));
+  else if (!done && wasDone) logActivity(task.project_id, req.params.id, 'task_reopened', 'admin', updTask.text.substring(0,80));
+  else if (text !== undefined && text.trim() !== task.text) logActivity(task.project_id, req.params.id, 'task_edited', 'admin', updTask.text.substring(0,80));
+  else if (status !== undefined && status !== task.status) logActivity(task.project_id, req.params.id, 'status_changed', 'admin', status);
+  else if (priority !== undefined && priority !== task.priority) logActivity(task.project_id, req.params.id, 'priority_changed', 'admin', priority);
 
   // Email klijentu kad admin označi zadatak kao gotov
   if (done && !wasDone) {
@@ -384,6 +410,7 @@ app.post('/api/client/tasks/:id/comments', (req, res) => {
   const id = genId();
   db.prepare("INSERT INTO comments (id,task_id,text,author,created_at) VALUES (?,?,?,'client',?)")
     .run(id, req.params.id, text.trim(), new Date().toISOString());
+  logActivity(task.project_id, req.params.id, 'comment_added', 'client', text.trim().substring(0,80));
 
   // Email notification
   const subject = `[Flow] Novi komentar – ${task.proj_name}`;
