@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, createContext, useContext, useRef } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 const generateCode = () => {
@@ -13,49 +13,26 @@ const fmtDate = (iso) => {
   return p(d.getDate())+'.'+p(d.getMonth()+1)+'.'+d.getFullYear()+' '+p(d.getHours())+':'+p(d.getMinutes());
 };
 
-// ─── Theme ────────────────────────────────────────────────────────────────────
-const THEMES = {
-  dark: {
-    bg:'#16202c', sid:'#1b2636', card:'#1f2d40', bdr:'#26344a',
-    txt:'#eef1f5', mut:'#8492a5', acc:'#c6a23c', grn:'#4caf7d',
-    red:'#e05c5c', amber:'#c6a23c',
-    taskDone:'#1a2535', taskDoneBdr:'#26344a',
-    commentAdmin:'#1e2d45', commentAdminBdr:'#34465f', commentAdminTxt:'#c6a23c',
-    commentClient:'#2a2010', commentClientBdr:'#4a3a1a', commentClientTxt:'#e8c97a',
-    codeBlock:'#16202c', inputBg:'#16202c', btnSecBg:'#26344a',
-  },
-  light: {
-    bg:'#f7f5f0', sid:'#fffdf9', card:'#fffdf9', bdr:'#e3ddd1',
-    txt:'#1f2a3d', mut:'#4a5568', acc:'#c6a23c', grn:'#2d7a4f',
-    red:'#c5221f', amber:'#b8860b',
-    taskDone:'#f1ede4', taskDoneBdr:'#e3ddd1',
-    commentAdmin:'#f0ead8', commentAdminBdr:'#d4c49a', commentAdminTxt:'#8a6a1a',
-    commentClient:'#fef3e2', commentClientBdr:'#fde293', commentClientTxt:'#7a5200',
-    codeBlock:'#f1ede4', inputBg:'#f1ede4', btnSecBg:'#ece7dc',
-  }
+// ─── Theme (light only) ───────────────────────────────────────────────────────
+const LIGHT = {
+  bg:'#f7f5f0', sid:'#fffdf9', card:'#fffdf9', bdr:'#e3ddd1',
+  txt:'#1f2a3d', mut:'#4a5568', acc:'#c6a23c', grn:'#2d7a4f',
+  red:'#c5221f', amber:'#b8860b',
+  taskDone:'#f1ede4', taskDoneBdr:'#e3ddd1',
+  commentAdmin:'#f0ead8', commentAdminBdr:'#d4c49a', commentAdminTxt:'#8a6a1a',
+  commentClient:'#fef3e2', commentClientBdr:'#fde293', commentClientTxt:'#7a5200',
+  codeBlock:'#f1ede4', inputBg:'#f1ede4', btnSecBg:'#ece7dc',
 };
 
-const PRIO_COLORS = {
-  dark: {
-    normal: { label:'Normalan', color:'#8492a5', bg:'#26344a', border:'#34465f' },
-    visok:  { label:'Visok',    color:'#e8c97a', bg:'#2a2010', border:'#4a3a1a' },
-    hitan:  { label:'Hitan',   color:'#e05c5c', bg:'#2d1a1a', border:'#4a2a2a' },
-    nizak:  { label:'Nizak',   color:'#7ab8d4', bg:'#1a2d3d', border:'#2a4a5a' },
-  },
-  light: {
-    normal: { label:'Normalan', color:'#4a5568', bg:'#ece7dc', border:'#e3ddd1' },
-    visok:  { label:'Visok',    color:'#8a6a1a', bg:'#fef3e2', border:'#e8c97a' },
-    hitan:  { label:'Hitan',   color:'#c5221f', bg:'#fce8e6', border:'#f5c6c6' },
-    nizak:  { label:'Nizak',   color:'#2a5a8a', bg:'#e8f0fa', border:'#b0c8e8' },
-  }
+const LIGHT_PRIO = {
+  normal: { label:'Normalan', color:'#4a5568', bg:'#ece7dc', border:'#e3ddd1' },
+  visok:  { label:'Visok',    color:'#8a6a1a', bg:'#fef3e2', border:'#e8c97a' },
+  hitan:  { label:'Hitan',   color:'#c5221f', bg:'#fce8e6', border:'#f5c6c6' },
+  nizak:  { label:'Nizak',   color:'#2a5a8a', bg:'#e8f0fa', border:'#b0c8e8' },
 };
 const PRIO_CYCLE = ['normal','visok','hitan','nizak'];
 
-const ThemeCtx = createContext('dark');
-const useTheme = () => {
-  const theme = useContext(ThemeCtx);
-  return { C: THEMES[theme], PRIO: PRIO_COLORS[theme], theme };
-};
+const useTheme = () => ({ C: LIGHT, PRIO: LIGHT_PRIO });
 
 const api = async (url, opts={}, adminPw) => {
   const h = {'Content-Type':'application/json', ...(adminPw ? {'authorization':'Bearer '+adminPw} : {}), ...opts.headers};
@@ -195,12 +172,44 @@ function AddTaskInput({onAdd }) {
   );
 }
 
+function ExpandableText({ text, style, onClick, title }) {
+  const { C } = useTheme();
+  const [expanded, setExpanded] = useState(false);
+  const [clamped, setClamped] = useState(false);
+  const ref = useRef(null);
+
+  useEffect(() => {
+    const el = ref.current;
+    if (el) setClamped(el.scrollHeight > el.clientHeight + 1);
+  }, [text]);
+
+  const clampStyle = expanded ? null : {
+    display:'-webkit-box', WebkitLineClamp:3, WebkitBoxOrient:'vertical', overflow:'hidden'
+  };
+
+  return (
+    <div style={{flex:1,minWidth:0}}>
+      <p ref={ref} onClick={onClick} title={title} style={{...style, ...clampStyle}}>
+        {text}
+      </p>
+      {(clamped || expanded) && (
+        <button onClick={e=>{e.stopPropagation();setExpanded(v=>!v);}}
+          style={{background:'transparent',border:'none',color:C.mut,fontSize:11,
+            fontWeight:600,cursor:'pointer',padding:0,marginTop:2}}>
+          {expanded ? 'prikaži manje' : 'prikaži više'}
+        </button>
+      )}
+    </div>
+  );
+}
+
 function TaskItem({task, isFirst, isLast, onToggle, onMoveUp, onMoveDown, onDelete, onChangePriority, onAddComment, onDeleteComment, onResolveComment, onEditNote, onEditText, onSetStatus, onSetDueDate, onAddAttachment, onDeleteAttachment, adminPw }) {
   const { C, PRIO } = useTheme();
   const [showNoteEdit, setShowNoteEdit] = useState(false);
   const [noteText, setNoteText] = useState(task.note||'');
   const [editingText, setEditingText] = useState(false);
   const [taskText, setTaskText] = useState(task.text);
+  const [showDue, setShowDue] = useState(false);
 
   useEffect(()=>{setTaskText(task.text);},[task.text]);
   useEffect(()=>{setNoteText(task.note||'');},[task.note]);
@@ -227,7 +236,7 @@ function TaskItem({task, isFirst, isLast, onToggle, onMoveUp, onMoveDown, onDele
             background:task.done?C.grn:'transparent',
             display:'flex',alignItems:'center',justifyContent:'center',
             marginTop:1,color:'#0c0e10',cursor:'pointer',transition:'all 0.15s'}}>
-          {task.done&&<CheckIco/>}
+          {Boolean(task.done)&&<CheckIco/>}
         </button>
 
         <div style={{flex:1,minWidth:0}}>
@@ -240,12 +249,10 @@ function TaskItem({task, isFirst, isLast, onToggle, onMoveUp, onMoveDown, onDele
                 style={{flex:1,background:C.inputBg,border:`1px solid ${C.acc}`,borderRadius:4,
                   padding:'5px 8px',fontSize:14,color:C.txt,resize:'none',lineHeight:1.5}}/>
             ):(
-              <p onClick={()=>setEditingText(true)} title="Klikni za uredi"
+              <ExpandableText text={task.text} onClick={()=>setEditingText(true)} title="Klikni za uredi"
                 style={{fontSize:14,color:task.done?C.mut:C.txt,
                   textDecoration:task.done?'line-through':'none',
-                  lineHeight:1.5,flex:1,minWidth:0,cursor:'text',whiteSpace:'pre-wrap'}}>
-                {task.text}
-              </p>
+                  lineHeight:1.5,cursor:'text',whiteSpace:'pre-wrap'}}/>
             )}
             <PrioBadge priority={task.priority} onClick={()=>onChangePriority(task.id,task.priority)}/>
           </div>
@@ -287,7 +294,7 @@ function TaskItem({task, isFirst, isLast, onToggle, onMoveUp, onMoveDown, onDele
             <span style={{fontSize:11,color:C.mut}}>
               {task.created_at ? new Date(task.created_at).toLocaleDateString('hr-HR',{day:'2-digit',month:'2-digit',year:'numeric'}) : ''}
             </span>
-            {task.done && task.updated_at && (
+            {Boolean(task.done) && task.updated_at && (
               <span style={{fontSize:11,color:C.grn}}>
                 ✓ {new Date(task.updated_at).toLocaleDateString('hr-HR',{day:'2-digit',month:'2-digit',year:'numeric'})}
               </span>
@@ -296,21 +303,30 @@ function TaskItem({task, isFirst, isLast, onToggle, onMoveUp, onMoveDown, onDele
 
             {!task.done && (() => {
               const due = task.due_date ? new Date(task.due_date + 'T00:00:00') : null;
+              if (!due && !showDue) {
+                return (
+                  <button onClick={()=>setShowDue(true)}
+                    style={{background:'transparent',border:'none',color:C.mut,
+                      fontSize:11,fontWeight:600,cursor:'pointer',padding:0}}>
+                    + rok
+                  </button>
+                );
+              }
               const overdue = due && due < new Date();
               const soon = due && !overdue && (due - new Date()) < 2*86400000;
               const color = overdue ? C.red : soon ? C.amber : C.mut;
               return (
                 <div style={{display:'flex',alignItems:'center',gap:6}}>
                   <span style={{fontSize:11,color:C.mut,fontWeight:500}}>rok:</span>
-                  <input type="date" value={task.due_date||''}
+                  <input type="date" value={task.due_date||''} autoFocus={!due}
                     onChange={e=>onSetDueDate(task.id, e.target.value||null)}
                     style={{fontSize:12,color:due?color:C.mut,
                       background:C.card,border:`1px solid ${due?color:C.bdr}`,
                       borderRadius:6,padding:'2px 6px',cursor:'pointer',
                       fontFamily:'inherit',fontWeight:due?600:400}}/>
-                  {due && <button onClick={()=>onSetDueDate(task.id,null)}
+                  <button onClick={()=>{onSetDueDate(task.id,null);setShowDue(false);}}
                     style={{background:'transparent',border:'none',
-                      color:C.mut,cursor:'pointer',fontSize:14,padding:0}}>✕</button>}
+                      color:C.mut,cursor:'pointer',fontSize:14,padding:0}}>✕</button>
                 </div>
               );
             })()}
@@ -407,7 +423,7 @@ function ProjDetailView({proj, done, total, pct, editProj, setEditProj, onSaveEd
             </div>
           </div>
           <div style={{display:'flex',alignItems:'center',gap:10,background:C.inputBg,
-            border:`1px solid #1a2a40`,borderRadius:6,padding:'10px 14px',marginBottom:14}}>
+            border:`1px solid ${C.bdr}`,borderRadius:6,padding:'10px 14px',marginBottom:14}}>
             <div style={{flex:1,minWidth:0}}>
               <p style={{fontSize:10,color:C.mut,textTransform:'uppercase',
                 letterSpacing:'0.08em',marginBottom:2,fontWeight:600}}>Pristupni kod</p>
@@ -558,7 +574,7 @@ function NewProjForm({form, setForm, codeCopied, onCopy, onCreate, onCancel }) {
 }
 
 // ─── Home ─────────────────────────────────────────────────────────────────────
-function HomeView({ toggleTheme, theme,onAdmin, onClient }) {
+function HomeView({ onAdmin, onClient }) {
   const { C, PRIO } = useTheme();
   const [tab, setTab] = useState('client');
   const [ap, setAp] = useState('');
@@ -589,11 +605,6 @@ function HomeView({ toggleTheme, theme,onAdmin, onClient }) {
           <img src="https://arcadian.hr/icon-512.png" alt="Arcadian"
             style={{height:100,width:100,borderRadius:22,marginBottom:10,boxShadow:'0 4px 20px rgba(0,0,0,0.3)'}}/>
           <p style={{fontSize:12,color:C.mut,fontWeight:600}}>Upravljanje projektima</p>
-          <button onClick={toggleTheme}
-            style={{background:'transparent',border:'none',fontSize:20,cursor:'pointer',marginTop:8}}
-            title={theme==='dark'?'Svijetli dizajn':'Tamni dizajn'}>
-            {theme==='dark'?<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" style={{width:16,height:16}}><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>:<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" style={{width:16,height:16}}><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>}
-          </button>
         </div>
         <div style={{background:C.card,border:`1px solid ${C.bdr}`,borderRadius:8,overflow:'hidden'}}>
           <div style={{display:'flex',borderBottom:`1px solid ${C.bdr}`}}>
@@ -907,7 +918,7 @@ function ActivityLog({ projectId, adminPw }) {
   );
 }
 
-function AdminView({adminPw, onLogout, toggleTheme, theme}) {
+function AdminView({adminPw, onLogout}) {
   const { C, PRIO } = useTheme();
   const [projects, setProjects] = useState([]);
   const [selId, setSelId] = useState(null);
@@ -1075,11 +1086,6 @@ function AdminView({adminPw, onLogout, toggleTheme, theme}) {
                 padding:'4px 10px',borderRadius:4,cursor:'pointer',fontWeight:600}}>
               {showSettings?'✕ zatvori':'postavke'}
             </button>
-            <button onClick={toggleTheme} title={theme==='dark'?'Svijetli dizajn':'Tamni dizajn'}
-              style={{background:'transparent',border:'none',fontSize:16,color:C.mut,
-                padding:'4px 8px',borderRadius:4,cursor:'pointer'}}>
-              {theme==='dark'?<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" style={{width:16,height:16}}><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>:<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" style={{width:16,height:16}}><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>}
-            </button>
             <button onClick={()=>{SESSION.clearAdmin();onLogout();}}
               style={{background:'transparent',border:'none',fontSize:12,color:C.mut,
                 padding:'4px 10px',borderRadius:4,cursor:'pointer',fontWeight:600}}>odjava</button>
@@ -1105,7 +1111,7 @@ function AdminView({adminPw, onLogout, toggleTheme, theme}) {
           </div>
         )}
         {apiErr&&(
-          <div style={{background:C.taskDone,borderTop:`1px solid #3d1010`,padding:'8px 16px',
+          <div style={{background:C.taskDone,borderTop:`1px solid ${C.bdr}`,padding:'8px 16px',
             fontSize:12,color:C.red,display:'flex',justifyContent:'space-between',fontWeight:600}}>
             {apiErr}<button onClick={()=>setApiErr('')}
               style={{background:'none',border:'none',color:C.red,cursor:'pointer'}}>✕</button>
@@ -1211,12 +1217,10 @@ function ClientTaskText({ task, onEdit, onDelete }) {
 
   return (
     <div style={{flex:1,display:'flex',alignItems:'flex-start',justifyContent:'space-between',gap:8}}>
-      <p onClick={()=>!task.done&&setEditing(true)}
+      <ExpandableText text={task.text} onClick={()=>!task.done&&setEditing(true)}
+        title={task.done?'':'Klikni za uredi'}
         style={{fontSize:14,color:task.done?C.mut:C.txt,textDecoration:task.done?'line-through':'none',
-          lineHeight:1.5,whiteSpace:'pre-wrap',flex:1,cursor:task.done?'default':'text'}}
-        title={task.done?'':'Klikni za uredi'}>
-        {task.text}
-      </p>
+          lineHeight:1.5,whiteSpace:'pre-wrap',cursor:task.done?'default':'text'}}/>
       {!task.done && (
         <button onClick={()=>onDelete(task.id)}
           style={{background:'transparent',border:'none',color:C.red,cursor:'pointer',
@@ -1229,7 +1233,7 @@ function ClientTaskText({ task, onEdit, onDelete }) {
   );
 }
 
-function ClientView({project: initialProject, accessCode, onLogout, toggleTheme, theme }) {
+function ClientView({project: initialProject, accessCode, onLogout }) {
   const { C, PRIO } = useTheme();
   const [project, setProject] = useState(initialProject);
   const [refreshing, setRefreshing] = useState(false);
@@ -1299,11 +1303,6 @@ function ClientView({project: initialProject, accessCode, onLogout, toggleTheme,
               display:'flex',alignItems:'center',gap:4,fontWeight:600}}>
             <RefreshIco/>{refreshing?'...':'osvježi'}
           </button>
-          <button onClick={toggleTheme} title={theme==='dark'?'Svijetli dizajn':'Tamni dizajn'}
-            style={{background:'transparent',border:'none',fontSize:16,color:C.mut,
-              padding:'0 6px',cursor:'pointer'}}>
-            {theme==='dark'?<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" style={{width:16,height:16}}><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>:<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" style={{width:16,height:16}}><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>}
-          </button>
           <button onClick={()=>{SESSION.clearClient();onLogout();}}
             style={{background:'transparent',border:'none',fontSize:12,color:C.mut,
               cursor:'pointer',fontWeight:600}}>odjava</button>
@@ -1344,7 +1343,7 @@ function ClientView({project: initialProject, accessCode, onLogout, toggleTheme,
                 border:`2px solid ${task.done?C.grn:C.bdr}`,
                 background:task.done?C.grn:'transparent',
                 display:'flex',alignItems:'center',justifyContent:'center',marginTop:2,color:'#0c0e10'}}>
-                {task.done&&<CheckIco/>}
+                {Boolean(task.done)&&<CheckIco/>}
               </div>
               <div style={{flex:1,minWidth:0}}>
                 <div style={{display:'flex',alignItems:'flex-start',justifyContent:'space-between',gap:8,marginBottom:4}}>
@@ -1382,27 +1381,15 @@ export default function App() {
   const [screen, setScreen] = useState('loading');
   const [adminPw, setAdminPw] = useState('');
   const [clientData, setClientData] = useState(null);
-  const [theme, setTheme] = useState(() => localStorage.getItem('flow_theme') || 'light');
 
-  const toggleTheme = () => {
-    const next = theme === 'dark' ? 'light' : 'dark';
-    setTheme(next);
-    localStorage.setItem('flow_theme', next);
-  };
-
-  // Sync body background with theme
+  // Apply the light theme to the document
   useEffect(() => {
-    document.body.style.background = THEMES[theme].bg;
-    document.body.style.color = THEMES[theme].txt;
+    document.body.style.background = LIGHT.bg;
+    document.body.style.color = LIGHT.txt;
     const root = document.documentElement;
-    if (theme === 'light') {
-      root.style.setProperty('--sidebar-bg', '#f0ede6');
-      root.style.setProperty('--sidebar-bdr', '#e3ddd1');
-    } else {
-      root.style.setProperty('--sidebar-bg', '#1b2636');
-      root.style.setProperty('--sidebar-bdr', '#26344a');
-    }
-  }, [theme]);
+    root.style.setProperty('--sidebar-bg', '#f0ede6');
+    root.style.setProperty('--sidebar-bdr', '#e3ddd1');
+  }, []);
 
   // Auto-restore session on load
   useEffect(()=>{
@@ -1428,23 +1415,19 @@ export default function App() {
   },[]);
 
   if(screen==='loading') return (
-    <ThemeCtx.Provider value={theme}>
-      <div style={{minHeight:'100vh',display:'flex',alignItems:'center',justifyContent:'center',background:THEMES[theme].bg}}>
-        <p style={{fontSize:12,color:THEMES[theme].mut}}>Učitavanje...</p>
-      </div>
-    </ThemeCtx.Provider>
+    <div style={{minHeight:'100vh',display:'flex',alignItems:'center',justifyContent:'center',background:LIGHT.bg}}>
+      <p style={{fontSize:12,color:LIGHT.mut}}>Učitavanje...</p>
+    </div>
   );
 
   return (
-    <ThemeCtx.Provider value={theme}>
+    <>
       {screen==='home'&&<HomeView
         onAdmin={p=>{setAdminPw(p);setScreen('admin');}}
-        onClient={(proj,code)=>{setClientData({project:proj,accessCode:code});setScreen('client');}}
-        toggleTheme={toggleTheme} theme={theme}/>}
-      {screen==='admin'&&<AdminView adminPw={adminPw} onLogout={()=>{setAdminPw('');setScreen('home');}}
-        toggleTheme={toggleTheme} theme={theme}/>}
+        onClient={(proj,code)=>{setClientData({project:proj,accessCode:code});setScreen('client');}}/>}
+      {screen==='admin'&&<AdminView adminPw={adminPw} onLogout={()=>{setAdminPw('');setScreen('home');}}/>}
       {screen==='client'&&clientData&&<ClientView project={clientData.project} accessCode={clientData.accessCode}
-        onLogout={()=>{setClientData(null);setScreen('home');}} toggleTheme={toggleTheme} theme={theme}/>}
-    </ThemeCtx.Provider>
+        onLogout={()=>{setClientData(null);setScreen('home');}}/>}
+    </>
   );
 }
