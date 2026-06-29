@@ -172,6 +172,14 @@ app.post('/api/auth/admin', authLimiter, async (req, res) => {
  res.json({ ok: true, token });
 });
 
+app.post('/api/auth/client', authLimiter, (req, res) => {
+  const { code } = req.body;
+  if (!code?.trim()) return res.status(401).json({ error: 'Pogrešan pristupni kod.' });
+  const proj = db.prepare("SELECT * FROM projects WHERE access_code=?").get(code.trim());
+  if (!proj) return res.status(401).json({ error: 'Pogrešan pristupni kod.' });
+  res.json({ ok: true, project: getProjectWithTasks(proj.id) });
+});
+
 // ── Projects ─────────────────────────────────────────────────────────────────
 app.get('/api/projects', (req, res) => {
   if (!checkAdmin(req.headers['authorization'], res)) return;
@@ -446,10 +454,6 @@ app.post('/api/client/tasks/:id/comments', (req, res) => {
 });
 
 
-app.get('*', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'index.html'));
-});
-
 // Serve uploaded files
 
 // Upload attachment (admin)
@@ -499,6 +503,11 @@ app.delete('/api/attachments/:id', (req, res) => {
 app.get('/api/tasks/:id/attachments', (req, res) => {
   if (!checkAdmin(req.headers['authorization'], res)) return;
   res.json(db.prepare("SELECT * FROM attachments WHERE task_id=? ORDER BY created_at ASC").all(req.params.id));
+});
+
+// Catch-all: serve SPA index.html (must be the LAST route so API routes match first)
+app.get('*', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
 app.listen(PORT, () => console.log(`Flow @ ${PORT}`));
